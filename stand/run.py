@@ -132,6 +132,9 @@ class Stand:
         self.fleet = fleetmod.load()
         self.log = EventLog(cap=600)
         self.stop = threading.Event()
+        # the first report waits for real state (after history and the first live tick); wake = report now
+        self.ready = threading.Event()
+        self.wake = threading.Event()
         self.mode = ""
         self.policy = ECO_POLICY
         self.started = time.time()
@@ -279,6 +282,7 @@ class Stand:
         threading.Thread(target=work, daemon=True, name=f"send-{x.u['imei']}").start()
 
     def live_loop(self) -> None:
+        first_tick = False
         last_save = time.time()
         prev = time.time()
         while not self.stop.is_set():
@@ -300,6 +304,10 @@ class Stand:
                 if len(x.tr.archive) > ARCHIVE_CAP:
                     del x.tr.archive[: len(x.tr.archive) - ARCHIVE_CAP]
                 self._flush_async(x, now, s.coverage)
+            if not first_tick:
+                first_tick = True
+                # give the first TCP sessions a few seconds, then report a snapshot with real state
+                threading.Timer(8, self.ready.set).start()
             if now - last_save > 60:
                 last_save = now
                 self.save_state()
@@ -406,6 +414,8 @@ class Stand:
     def report_loop(self) -> None:
         if not self.api:
             return
+        while not self.stop.is_set() and not self.ready.wait(1):
+            pass
         while not self.stop.is_set():
             body = self.snapshot()
             events = self.log.take_new(300)
@@ -426,7 +436,8 @@ class Stand:
             except Exception as e:
                 self.report_error = str(e)[:200]
                 log.warning("report: %s", e)
-            self.stop.wait(delay)
+            self.wake.wait(delay)
+            self.wake.clear()
 
     # ------------------------------------------------------------------ entry
     def run(self) -> None:
@@ -472,6 +483,7 @@ def main() -> None:
 
     def stop(*_a) -> None:
         stand.stop.set()
+        stand.wake.set()
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
