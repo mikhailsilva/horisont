@@ -340,12 +340,12 @@ class Machine:
                 s.fuel_l += add
                 self.events.append((t, f"заправка {add:.0f} л перед сменой"))
         lunch = left is not None and 12.5 <= self.local_hour(t) < 13.2 and p.key not in ("excavator", "dump_truck")
+        prev = (self.x, self.y)  # before _advance moves the machine, or the odometers never grow
         kmh, act, implement = (0.0, "parked", False) if lunch else self._advance(dt)
         implement = implement or self.active("implement", t)
         running = act != "parked" or self.active("force_on", t)
         if self.active("force_off", t):
             running, kmh, act = False, 0.0, "parked"
-        prev = (self.x, self.y)
         s.speed_kmh = kmh if running else 0.0
         s.ignition = s.engine = running
         s.implement = implement and running

@@ -74,6 +74,10 @@ def test_history_reaches_the_gateway_through_every_tracker_protocol(tmp_path, ga
             assert not x.tr.archive, x.u["vehicle"]
     # the Omnicomm emulation retranslates over an EGTS dispatcher link with its own object id
     assert "7011043" in got
+    # the machines really drive: GNSS and CAN odometers grow with the distance covered
+    moved = [x for x in st.units if x.m.s.gnss_odo_m > 1000]
+    assert len(moved) >= len(st.units) // 2
+    assert all(x.m.s.odo_m > x.m.s.gnss_odo_m for x in moved if x.m.prof.odometer)
     # engine hours from J1939 HOURS never run backwards within one tracker
     items = q.take(100_000)
     by_dev: dict[str, list[tuple[float, float]]] = {}
