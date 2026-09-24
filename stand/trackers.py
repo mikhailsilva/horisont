@@ -7,12 +7,16 @@ in the tracker's own protocol, waiting for each acknowledgement before dropping 
 
 from __future__ import annotations
 
+import json
 import math
 import socket
 import struct
 import threading
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
+from urllib.parse import urlsplit
 
 from sim.protocols import egts, egts_retranslator, galileosky, navtelecom, teltonika, wialon_ips, wialon_retranslator
 
@@ -70,13 +74,15 @@ class EventLog:
 PROTO_RU = {
     "galileosky": "Galileosky", "navtelecom_flex": "NTCB/FLEX", "egts": "EGTS", "wialon_ips": "Wialon IPS",
     "wialon_retranslator": "Wialon Retranslator", "egts_retranslator": "EGTS (ретрансляция)", "teltonika": "Teltonika Codec 8E",
+    "aemp": "AEMP 2.0",
 }
 
 
 class Tracker:
     """One terminal on one machine."""
 
-    def __init__(self, u: dict, machine, endpoints: dict, log: EventLog, live: bool = True, via: "PlatformRetranslator | None" = None):
+    def __init__(self, u: dict, machine, endpoints: dict, log: EventLog, live: bool = True,
+                 via: "PlatformRetranslator | PlatformPush | None" = None):
         self.u, self.m, self.endpoints, self.log, self.via = u, machine, endpoints, log, via
         self.archive: list[Rec] = []
         self.index = 0
@@ -250,7 +256,7 @@ class Tracker:
             first = self.last_error != str(e)
             self.last_error = str(e)
             if self.live and (self.connected or first):
-                self.log.add("conn", f"{self.u['vehicle']}: ошибка TCP-сессии ({e}); повтор позже", self.u["imei"])
+                self.log.add("conn", f"{self.u['vehicle']}: ошибка доставки ({e}); повтор позже", self.u["imei"])
             self.connected = False
             return 0
         self.last_error = None
@@ -273,7 +279,9 @@ class Tracker:
         p = self.u["protocol"]
         host, port = self.endpoint()
         target = "Traccar" if p == "teltonika" else "шлюз ITles"
-        with socket.create_connection((host, port), timeout=15) as sock:
+        # demo.traccar.org answers the IMEI packet after ~8 s and an AVL packet after ~4 s
+        timeout = 60 if p == "teltonika" else 15
+        with socket.create_connection((host, port), timeout=timeout) as sock:
             if p == "galileosky":
                 head = galileosky.head_packet(self.u["imei"])
                 sock.sendall(head)
@@ -431,3 +439,83 @@ class PlatformRetranslator:
             return done
         finally:
             r0.close()
+
+
+class PlatformPush:
+    """Delivery of the simext company records to the ITles API. The tracker keeps its record policy
+    and black box; on flush it POSTs the archive to /api/simext/push, and records leave the black box
+    only after an HTTP 200 answer. The owner will connect the Wialon/AEMP platform himself."""
+
+    BATCH = 2000
+
+    def __init__(self, api: str | None, key: str | None, company_id: str, platform_label: str,
+                 log: "EventLog | None" = None, post=None, timeout: float = 25.0):
+        self.api = (api or "").rstrip("/") or None
+        self.key, self.company_id, self.platform_label = key, company_id, platform_label
+        self.log = log
+        self.post = post or self._post
+        self.timeout = timeout
+        u = urlsplit(self.api or "")
+        self.host = u.hostname or "—"
+        self.port = u.port or (443 if (u.scheme or "https") == "https" else 80)
+        self.ok = False
+
+    def _post(self, body: dict) -> dict:
+        if not self.api or not self.key:
+            raise ConnectionError("нет ITLES_API_URL/STAND_KEY для push-доставки")
+        req = urllib.request.Request(
+            self.api + "/api/simext/push", data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode(),
+            method="POST",
+            headers={"content-type": "application/json", "authorization": f"Bearer {self.key}", "x-itles-client": "stand"},
+        )
+        with urllib.request.urlopen(req, timeout=self.timeout) as r:
+            return json.loads(r.read() or b"{}")
+
+    @staticmethod
+    def _record(tr: "Tracker", r: "Rec") -> dict:
+        # J1939 parameters only from the decoded frames of full records, like a real terminal keeps
+        c = r.can if r.full else {}
+        params: dict = {"ignition": 1 if r.ignition else 0, "pwr_v": round(r.power_v, 2),
+                        "odometer_km": round((c[917] if 917 in c else r.gnss_odo_m) / 1000, 3)}
+        if 247 in c:
+            params["engine_hours"] = round(c[247], 2)
+        if r.fuel_l is not None:
+            params["fuel_level_l"] = round(r.fuel_l, 1)
+        if 96 in c:
+            params["fuel_level_pct"] = round(c[96], 1)
+        if 250 in c:
+            params["fuel_used_l"] = round(c[250], 1)
+        if 190 in c:
+            params["rpm"] = round(c[190])
+        if 110 in c:
+            params["coolant_c"] = round(c[110])
+        if 92 in c:
+            params["engine_load_pct"] = round(c[92])
+        return {"unit": tr.u["imei"], "t": r.t, "lat": round(r.lat, 6), "lon": round(r.lon, 6),
+                "speed": round(r.speed, 1), "course": round(r.course, 1), "alt": r.alt, "sats": r.sats, "params": params}
+
+    def forward(self, tr: "Tracker", recs: list["Rec"], archive: bool) -> int:
+        total, fields = 0, None
+        for i in range(0, len(recs), self.BATCH):
+            part = recs[i:i + self.BATCH]
+            body = {"company": self.company_id, "records": [self._record(tr, r) for r in part]}
+            try:
+                resp = self.post(body)
+            except Exception as e:
+                raise ConnectionError(f"push {self.platform_label}: {e}") from e
+            if not isinstance(resp, dict):
+                raise ConnectionError(f"push {self.platform_label}: неожиданный ответ")
+            total += len(part)
+            tr.packets += 1
+            tr.bytes += len(json.dumps(body, ensure_ascii=False).encode())
+            tr.records_sent += len(part)
+            r = part[-1]
+            c = r.can if r.full else {}
+            fields = {"время": time.strftime("%H:%M:%S", time.localtime(r.t)), "координаты": f"{r.lat:.5f}, {r.lon:.5f}",
+                      "скорость": f"{r.speed:.0f} км/ч", "зажигание": r.ignition, "обороты": round(c.get(190, 0)),
+                      "моточасы": round(c.get(247, 0), 2), "топливо_л": None if r.fuel_l is None else round(r.fuel_l),
+                      "сохранено": resp.get("stored"), "дубли": resp.get("duplicates")}
+        self.log.add("packet", f"{tr.u['vehicle']}: {self.platform_label} ← {total} зап.{' (архив)' if archive else ''}",
+                     tr.u["imei"], fields=fields, dir="out", proto=tr.u["protocol"])
+        self.ok = True
+        return total

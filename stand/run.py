@@ -8,6 +8,10 @@ bytes over TCP: to the ITles gateway (Galileosky, NTCB/FLEX, EGTS, Wialon IPS), 
 Retranslator, EGTS dispatcher). The stand makes only outbound calls to the platform: a status report
 with recent packets, and scenario commands in the reply.
 
+The simext companies (platform/server/simext/companies.json) are simulated the same way: their
+machines report to their own platform — Teltonika to Traccar, Wialon/AEMP scenarios by HTTP push to
+/api/simext/push, the gateway machines over the same TCP paths as the demo fleet.
+
 While nobody watches, trackers send every 15 minutes and the stand reports as rarely, so the
 serverless database can suspend between sessions; the platform switches the stand to live mode
 when someone opens the stand or the fleet map.
@@ -31,7 +35,7 @@ from dataclasses import dataclass, field
 
 from . import fleet as fleetmod
 from .model import Machine
-from .trackers import PROTO_RU, EventLog, PlatformRetranslator, Tracker
+from .trackers import PROTO_RU, EventLog, PlatformPush, PlatformRetranslator, Tracker
 
 log = logging.getLogger("itles.stand")
 
@@ -127,7 +131,7 @@ class Api:
 
 
 class Stand:
-    def __init__(self, cfg: Config):
+    def __init__(self, cfg: Config, push_post=None):
         self.cfg = cfg
         self.fleet = fleetmod.load()
         self.log = EventLog(cap=600)
@@ -153,7 +157,10 @@ class Stand:
         for u in fleetmod.units(self.fleet):
             seed = int(hashlib.sha1(u["imei"].encode()).hexdigest()[:8], 16)
             m = Machine(u, self.fleet, seed, start_hours({**u, "year": self._year(u)}, seed))
-            tr = Tracker(u, m, endpoints, self.log, live=True, via=self.retranslators.get(u["path"]))
+            via = self.retranslators.get(u["path"])
+            if via is None and u["path"] in ("wialon", "aemp"):
+                via = PlatformPush(cfg.api, cfg.key, u["company_id"], u["platform_label"], log=self.log, post=push_post)
+            tr = Tracker(u, m, endpoints, self.log, live=True, via=via)
             self.units.append(Unit(u, m, tr))
         self.by_imei = {x.u["imei"]: x for x in self.units}
         self.frames_mark = (time.time(), 0)
@@ -162,8 +169,11 @@ class Stand:
         self.set_mode("eco" if self.api else "live")
 
     def _year(self, u: dict) -> int | None:
-        m = next((x for x in self.fleet["machines"] if x["id"] == u["machine_id"]), None)
-        return m.get("year") if m else None
+        if u.get("machine_id"):
+            m = next((x for x in self.fleet["machines"] if x["id"] == u["machine_id"]), None)
+            if m:
+                return m.get("year")
+        return u.get("year")
 
     # ------------------------------------------------------------------ persistence
     def load_state(self) -> float | None:
@@ -337,7 +347,9 @@ class Stand:
             host, port = tr.endpoint()
             item = {
                 "id": x.u["imei"], "imei": x.u["imei"], "vehicle": x.u["vehicle"], "model": x.u["model"], "protocol": x.u["protocol"],
-                "protocol_label": PROTO_RU.get(x.u["protocol"], x.u["protocol"]), "path": x.u["path"], "path_label": PATH_RU.get(x.u["path"], x.u["path"]),
+                "protocol_label": PROTO_RU.get(x.u["protocol"], x.u["protocol"]), "path": x.u["path"],
+                "path_label": x.u["platform_label"] if x.u.get("company") else PATH_RU.get(x.u["path"], x.u["path"]),
+                "company": x.u.get("company"), "platform": x.u.get("platform"),
                 "endpoint": f"{host}:{port}", "connected": tr.connected and now >= x.reboot_until, "archive": len(tr.archive),
                 "packets": tr.packets, "bytes": tr.bytes, "records_sent": tr.records_sent, "last_packet_t": tr.last_packet_t,
                 "can": x.u["can"], "fuel_sensor": x.u["fuel_sensor"], "free": x.u["free"], "rebooting": now < x.reboot_until,
@@ -472,7 +484,8 @@ def main() -> None:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"), format="%(asctime)s %(name)s %(levelname)s %(message)s")
     if args.write_mappings:
         fleet = fleetmod.load()
-        maps = {u["imei"]: fleetmod.gateway_mapping(u) for u in fleetmod.units(fleet) if u["path"] != "traccar"}
+        maps = {u["imei"]: fleetmod.gateway_mapping(u) for u in fleetmod.units(fleet)
+                if u["path"] in ("gateway", "wialon_local", "omnicomm_online")}
         pathlib.Path(args.write_mappings).write_text(json.dumps(maps, ensure_ascii=False, indent=1), encoding="utf-8")
         print(f"mappings: {len(maps)} trackers → {args.write_mappings}")
         return

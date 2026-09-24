@@ -1,4 +1,5 @@
-"""Stand fleet from the platform's demo tenant definition (platform/server/demo-fleet.json)."""
+"""Stand fleet from the platform's demo tenant and the simext companies
+(platform/server/demo-fleet.json, platform/server/simext/companies.json)."""
 
 from __future__ import annotations
 
@@ -7,14 +8,39 @@ import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FLEET_FILE = ROOT / "platform" / "server" / "demo-fleet.json"
+COMPANIES_FILE = ROOT / "platform" / "server" / "simext" / "companies.json"
 
 
 def load() -> dict:
-    return json.loads(FLEET_FILE.read_text(encoding="utf-8"))
+    fleet = json.loads(FLEET_FILE.read_text(encoding="utf-8"))
+    fleet["companies"] = json.loads(COMPANIES_FILE.read_text(encoding="utf-8"))["companies"]
+    return fleet
+
+
+def company_path(c: dict, u: dict) -> str:
+    """Delivery path of a company unit: the platform it reports to decides."""
+    if c["platform"] in ("traccar", "wialon", "aemp"):
+        return c["platform"]
+    return u.get("path", "gateway")
+
+
+def company_units(companies: list[dict]) -> list[dict]:
+    """Units of the simext companies; they are not registered in ITles — the owner connects them himself."""
+    out = []
+    for c in companies:
+        for u in c.get("units", []):
+            out.append({
+                "imei": u["uid"], "model": u["tracker_model"], "protocol": u["protocol"], "path": company_path(c, u),
+                "can": u["can"], "fuel_sensor": u["fuel_sensor"], "vehicle": u["name"], "machine_id": None,
+                "profile": u["profile"], "region": u["region"], "field": u["field"], "tank_l": u["tank_l"],
+                "width_m": u.get("work_width_m"), "chassis": u["chassis"], "free": True,
+                "company": c["name"], "company_id": c["id"], "platform": c["platform"], "platform_label": c["platform_label"],
+            })
+    return out
 
 
 def units(fleet: dict) -> list[dict]:
-    """Every emulated tracker: the demo machines plus free (not yet registered) trackers."""
+    """Every emulated tracker: the demo machines, free trackers and the simext company units."""
     out = []
     for m in fleet["machines"]:
         t = m["tracker"]
@@ -30,6 +56,7 @@ def units(fleet: dict) -> list[dict]:
             "fuel_sensor": f["fuel_sensor"], "vehicle": f["vehicle"], "machine_id": None, "profile": f["profile"],
             "region": f["region"], "field": f["field"], "tank_l": f["tank_l"], "width_m": None, "chassis": "wheeled", "free": True,
         })
+    out.extend(company_units(fleet.get("companies", [])))
     return out
 
 

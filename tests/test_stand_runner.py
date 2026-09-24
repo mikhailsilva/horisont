@@ -69,6 +69,10 @@ def test_history_reaches_the_gateway_through_every_tracker_protocol(tmp_path, ga
         if x.u["path"] == "traccar":
             # the Traccar server is unreachable: the history pauses and stays in the black box
             assert x.fast_off and x.tr.archive and x.u["imei"] not in got
+        elif x.u["path"] in ("wialon", "aemp"):
+            # company push units have no platform to push to in this stand (no injected post): the
+            # history pauses the same way and stays in the black box
+            assert x.fast_off and x.tr.archive and x.u["imei"] not in got
         else:
             assert got.get(x.u["imei"], 0) > 0, x.u["vehicle"]
             assert not x.tr.archive, x.u["vehicle"]
