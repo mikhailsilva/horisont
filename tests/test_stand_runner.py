@@ -63,7 +63,7 @@ def test_history_reaches_the_gateway_through_every_tracker_protocol(tmp_path, ga
     hours = 13  # history is flushed every 4 h: enough attempts for the Traccar units to pause
     for x in st.units:
         x.last_t = now - hours * 3600 - 1
-    st.fast_forward(now - hours * 3600, now)
+    st.fast_forward(now - hours * 3600, now, flush_every=4 * 3600)
     got = q.by_device()
     for x in st.units:
         if x.u["path"] == "traccar":
