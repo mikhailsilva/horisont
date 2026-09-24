@@ -1,6 +1,6 @@
 // Produces .vercel/output (Build Output API v3): static UI + one bundled Node function + cron.
 import { build } from 'esbuild';
-import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 
 const out = '.vercel/output';
 rmSync(out, { recursive: true, force: true });
@@ -31,7 +31,14 @@ writeFileSync(
   `${out}/config.json`,
   JSON.stringify({
     version: 3,
-    routes: [{ src: '^/api/(.*)$', dest: '/api/index' }, { handle: 'filesystem' }],
+    // Emulated platforms (simext) are served by the same function under their own hosts.
+    routes: [
+      ...JSON.parse(readFileSync(new URL('../server/simext/companies.json', import.meta.url), 'utf8'))
+        .companies.filter((c) => c.platform === 'wialon' || c.platform === 'aemp')
+        .map((c) => ({ src: '^/(.*)$', has: [{ type: 'host', value: new URL(c.base_url).host }], dest: '/api/index' })),
+      { src: '^/api/(.*)$', dest: '/api/index' },
+      { handle: 'filesystem' },
+    ],
     crons: [{ path: '/api/cron/daily', schedule: '0 3 * * *' }],
   }),
 );

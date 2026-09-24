@@ -215,7 +215,7 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
           cursor={here ? { lat: here.lat, lon: here.lon, course: here.course } : null}
           follow={follow}
           height={440}
-          fitKey={`${id}:${from}:${to}:${pos.length > 0}`}
+          fitKey={`${id}:${preset}:${day}`}
         />
       )}
       <div className="space-y-2">

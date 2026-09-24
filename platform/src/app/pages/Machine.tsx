@@ -119,6 +119,7 @@ function SourcesBlock({ id, sources, canManage, onChange }: { id: string; source
             <div className="text-xs text-muted-foreground">
               {s.kind === 'tracker' && s.external_id ? `IMEI ${s.external_id}` : s.kind === 'osmand' && s.external_id ? `идентификатор ${s.external_id}` : s.external_id ? `ID ${s.external_id}` : s.label}
               {s.connector_label ? ' · ' + s.connector_label : ''}
+              {s.disabled_at ? <span className="badge ml-1 bg-muted text-muted-foreground">отключён</span> : null}
               {s.meta?.path ? ` · ${PATH_RU[s.meta.path] ?? s.meta.path}` : ''}
               {s.meta?.can ? ` · ${s.meta.can}` : ''}
               {s.meta?.fuel_sensor ? ` · ДУТ: ${s.meta.fuel_sensor}` : ''}
@@ -126,18 +127,45 @@ function SourcesBlock({ id, sources, canManage, onChange }: { id: string; source
               {s.last_seen_at ? ` · данные ${new Date(s.last_seen_at).toLocaleString('ru-RU')}` : ''}
             </div>
           </div>
-          {canManage && (
+          {canManage && !s.disabled_at && (
             <button
               className="text-xs text-danger hover:underline"
               onClick={async () => {
-                if (confirm('Отключить источник? Полученные данные сохранятся.')) {
-                  await api('DELETE', `/api/sources/${s.id}`);
-                  onChange();
-                }
+                if (!confirm('Отключить источник? Полученные данные сохранятся, но новые данные приниматься не будут.')) return;
+                await api('POST', `/api/sources/${s.id}/disable`);
+                onChange();
               }}
             >
               отключить
             </button>
+          )}
+          {canManage && s.disabled_at && (
+            <div className="flex items-center gap-2">
+              <button
+                className="text-xs text-primary hover:underline"
+                onClick={async () => {
+                  try {
+                    const r = await api('POST', `/api/sources/${s.id}/enable`);
+                    if (s.kind === 'phone' && r.pairing_code) setPair({ code: r.pairing_code });
+                    onChange();
+                  } catch (e) {
+                    setErr(e);
+                  }
+                }}
+              >
+                включить заново
+              </button>
+              <button
+                className="text-xs text-danger hover:underline"
+                onClick={async () => {
+                  if (!confirm('Удалить источник? Данные, уже полученные от него, останутся у машины.')) return;
+                  await api('DELETE', `/api/sources/${s.id}`);
+                  onChange();
+                }}
+              >
+                удалить
+              </button>
+            </div>
           )}
         </div>
       ))}

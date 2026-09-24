@@ -161,17 +161,19 @@ router.on('GET', '/api/machines/:id', async (c, { id }) => {
   const avg = hasBlock(u, 'hours') ? await avgDailyHours(c.db, id) : null;
   const cals = hasBlock(u, 'hours') || hasBlock(u, 'mileage')
     ? await c.db.query<any>(
-        `select c.source_id, c.metric, c.scale, c.offset_value, c.basis from calibrations c join sources s on s.id = c.source_id where s.machine_id = $1`,
+        `select c.source_id, c.metric, c.scale, c.offset_value, c.basis from calibrations c join sources s on s.id = c.source_id
+          where s.machine_id = $1 and s.deleted_at is null and s.disabled_at is null`,
         [id],
       )
     : { rows: [] as any[] };
   const conns = hasBlock(u, 'sources')
     ? await c.db.query<any>(
-        `select s.id, s.kind, s.external_id, s.label, s.connector_id, k.label as connector_label, s.meta,
+        `select s.id, s.kind, s.external_id, s.label, s.connector_id, k.label as connector_label, s.meta, s.disabled_at,
                 (extract(epoch from s.enroll_expires_at) * 1000)::float8 as enroll_expires_at,
                 (extract(epoch from s.last_seen_at) * 1000)::float8 as last_seen_at,
                 s.token_hash is not null as paired
-           from sources s left join connectors k on k.id = s.connector_id where s.machine_id = $1 order by s.created_at`,
+           from sources s left join connectors k on k.id = s.connector_id
+          where s.machine_id = $1 and s.deleted_at is null order by s.created_at`,
         [id],
       )
     : { rows: [] as any[] };
@@ -461,6 +463,7 @@ router.on('GET', '/api/machines/:id/counters', async (c, { id }) => {
        from counters c join sources s on s.id = c.source_id
        left join calibrations k on k.source_id = c.source_id and k.metric = c.metric
       where c.machine_id = $1 and c.metric = $2 and c.t > now() - ($3::int || ' days')::interval
+        and s.deleted_at is null
       order by c.t`,
     [id, metric, days],
   );
@@ -625,7 +628,7 @@ router.on('POST', '/api/machines/:id/sources', async (c, { id }) => {
 
 router.on('POST', '/api/sources/:id/pairing', async (c, { id }) => {
   const u = user(c);
-  const s = (await c.db.query<any>(`select machine_id, kind from sources where id = $1`, [id])).rows[0];
+  const s = (await c.db.query<any>(`select machine_id, kind from sources where id = $1 and deleted_at is null`, [id])).rows[0];
   if (!s || s.kind !== 'phone') throw notFound();
   const m = await loadVisibleMachine(c.db, u, s.machine_id);
   await assertCap(c.db, u, 'sources.manage', m.org_id);
@@ -637,20 +640,79 @@ router.on('POST', '/api/sources/:id/pairing', async (c, { id }) => {
   return json({ pairing_code: code, expires_in_hours: 24 });
 });
 
-router.on('DELETE', '/api/sources/:id', async (c, { id }) => {
+function sourceRow(c: Ctx, id: string) {
+  return c.db.query<any>(`select machine_id, kind, disabled_at, disabled_external_id from sources where id = $1 and deleted_at is null`, [id]);
+}
+
+router.on('POST', '/api/sources/:id/disable', async (c, { id }) => {
   const u = user(c);
-  const s = (await c.db.query<any>(`select machine_id, kind from sources where id = $1`, [id])).rows[0];
+  const s = (await sourceRow(c, id)).rows[0];
   if (!s) throw notFound();
   const m = await loadVisibleMachine(c.db, u, s.machine_id);
   await assertCap(c.db, u, 'sources.manage', m.org_id);
-  // data already received stays with the machine; the source just stops being accepted
+  if (s.disabled_at) return json({ ok: true }); // already disabled, idempotent
+  // tracker/osmand: the identifier becomes free (the gateway answers unknown_device);
+  // phone: the paired token stops working; a connector source just stops taking data
   await c.db.query(
-    `update sources set token_hash = null, enroll_code_hash = null,
+    `update sources set disabled_at = now(),
+            disabled_external_id = case when kind in ('tracker', 'osmand') then external_id else disabled_external_id end,
             external_id = case when kind in ('tracker', 'osmand') then null else external_id end,
-            label = coalesce(label, '') || ' (отключён)' where id = $1`,
+            token_hash = case when kind = 'phone' then null else token_hash end
+       where id = $1`,
     [id],
   );
   await audit(c.db, u, 'source_disabled', { machine: s.machine_id, kind: s.kind }, m.org_id);
+  return json({ ok: true });
+});
+
+router.on('POST', '/api/sources/:id/enable', async (c, { id }) => {
+  const u = user(c);
+  const s = (await sourceRow(c, id)).rows[0];
+  if (!s) throw notFound();
+  const m = await loadVisibleMachine(c.db, u, s.machine_id);
+  await assertCap(c.db, u, 'sources.manage', m.org_id);
+  if ((s.kind === 'tracker' || s.kind === 'osmand') && s.disabled_external_id) {
+    const taken = await c.db.query(
+      `select id from sources where kind = $2 and external_id = $1 and id <> $3 and deleted_at is null`,
+      [s.disabled_external_id, s.kind, id],
+    );
+    if (taken.rows.length)
+      throw new HttpError(409, 'identifier_taken', 'Этот идентификатор уже привязан к другому источнику. Сначала освободите его.');
+  }
+  await c.db.query(
+    `update sources set disabled_at = null,
+            external_id = coalesce(external_id, disabled_external_id),
+            disabled_external_id = case when external_id is null then null else disabled_external_id end
+       where id = $1`,
+    [id],
+  );
+  // a re-enabled phone needs a fresh pairing: the code from before the disable is void
+  const pairing = s.kind === 'phone' ? { pairing_code: null as string | null, expires_in_hours: 24 } : null;
+  if (pairing) {
+    const code = newPairingCode();
+    await c.db.query(
+      `update sources set enroll_code_hash = $2, enroll_expires_at = now() + interval '24 hours', token_hash = null where id = $1 and deleted_at is null`,
+      [id, sha256('pair:' + code)],
+    );
+    pairing.pairing_code = code;
+  }
+  await audit(c.db, u, 'source_enabled', { machine: s.machine_id, kind: s.kind }, m.org_id);
+  return json({ ok: true, ...(pairing ?? {}) });
+});
+
+router.on('DELETE', '/api/sources/:id', async (c, { id }) => {
+  const u = user(c);
+  const s = (await sourceRow(c, id)).rows[0];
+  if (!s) throw notFound();
+  const m = await loadVisibleMachine(c.db, u, s.machine_id);
+  await assertCap(c.db, u, 'sources.manage', m.org_id);
+  // soft delete: data already received stays with the machine; the source is hidden everywhere
+  await c.db.query(
+    `update sources set deleted_at = now(), external_id = null, disabled_external_id = null,
+            token_hash = null, enroll_code_hash = null, enroll_expires_at = null where id = $1`,
+    [id],
+  );
+  await audit(c.db, u, 'source_deleted', { machine: s.machine_id, kind: s.kind }, m.org_id);
   return json({ ok: true });
 });
 

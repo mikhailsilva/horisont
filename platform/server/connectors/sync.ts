@@ -38,7 +38,10 @@ export async function syncConnector(db: Db, connectorId: string, opts: { history
     report.units = units.length;
     for (const u of units) {
       let src = (
-        await db.query<any>(`select id, machine_id, org_id, kind from sources where connector_id = $1 and external_id = $2`, [c.id, u.id])
+        await db.query<any>(
+          `select id, machine_id, org_id, kind from sources where connector_id = $1 and external_id = $2 and deleted_at is null and disabled_at is null`,
+          [c.id, u.id],
+        )
       ).rows[0];
       if (!src) {
         const machineId = randomUUID();

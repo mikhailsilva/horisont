@@ -101,6 +101,14 @@ export function parseAempFleet(doc: any): { units: RemoteUnit[]; next: string | 
     const odo = dist ? toNum(txt(dist.odometer)) : null;
     if (dist && odo !== null && dist.datetime)
       records.push({ t: dist.datetime, odometer_km: distanceKm(odo, txt(dist.odometerunits)), odometer_method: 'ecu' });
+    const fu = e.fuelused;
+    const consumed = fu ? toNum(txt(fu.fuelconsumed)) : null;
+    const fuelUnits = fu ? String(txt(fu.fuelunits) ?? 'litre').toLowerCase() : '';
+    if (fu && consumed !== null && fu.datetime && (fuelUnits === 'litre' || fuelUnits === 'l'))
+      records.push({ t: fu.datetime, sensors: { fuel_used_l: consumed } });
+    const fr = e.fuelremaining;
+    const pct = fr ? toNum(txt(fr.percent)) : null;
+    if (fr && pct !== null && fr.datetime) records.push({ t: fr.datetime, sensors: { fuel_level_pct: pct } });
     units.push({ id: String(id), name: [txt(h.oemname), txt(h.model), id].filter(Boolean).join(' '), make: txt(h.oemname) ?? null, model: txt(h.model) ?? null, records });
   }
   let links = fleet.links ?? fleet.link ?? [];

@@ -52,6 +52,25 @@ export const BLOCKS: Record<Block, { label: string; hint: string }> = {
 };
 export const ALL_BLOCKS = Object.keys(BLOCKS) as Block[];
 
+/** Short Russian descriptions of the capabilities, for credentials sheets and the UI. */
+export const CAP_LABELS: Record<Cap, string> = {
+  'orgs.manage': 'управление организациями',
+  'users.manage': 'управление пользователями',
+  'machines.create': 'добавление машин',
+  'machines.edit': 'редактирование машин',
+  'machines.delete': 'удаление машин',
+  'sources.manage': 'подключение и отключение источников данных',
+  'connectors.manage': 'управление подключениями к платформам',
+  'service.manage': 'ведение плана ТО',
+  'readings.enter': 'ввод показаний счётчиков',
+  'audit.view': 'просмотр журнала действий',
+  'trash.view': 'доступ к корзине',
+  purge: 'окончательное удаление данных',
+  'stand.view': 'просмотр живого стенда',
+  'stand.control': 'команды живому стенду',
+  'settings.manage': 'настройки сервиса и ключи шлюзов',
+};
+
 const ALL_CAPS: Cap[] = [
   'orgs.manage', 'users.manage', 'machines.create', 'machines.edit', 'machines.delete', 'sources.manage',
   'connectors.manage', 'service.manage', 'readings.enter', 'audit.view', 'trash.view', 'purge',

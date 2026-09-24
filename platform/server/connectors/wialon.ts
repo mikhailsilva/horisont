@@ -1,4 +1,5 @@
 import type { IngestRecord } from '../ingest.js';
+import { SENSORS } from '../domain/sensors.js';
 import { ConnectorError, fetchJson, trimBase, type RemoteUnit } from './types.js';
 
 /**
@@ -44,6 +45,15 @@ export async function wialonCall(base: string, svc: string, params: unknown, sid
   return r;
 }
 
+/** Message parameters carry sensor values; keys follow the ITles sensor registry so they pass ingestion. */
+function paramsToSensors(prm: Record<string, unknown>): Record<string, number> {
+  const sensors: Record<string, number> = {};
+  for (const [k, v] of Object.entries(prm)) {
+    if (SENSORS[k] && typeof v === 'number' && Number.isFinite(v)) sensors[k] = v;
+  }
+  return sensors;
+}
+
 // Message speed is stored in km/h regardless of the unit's display measure system.
 export function wialonMessageToRecord(m: any, _mileageFactor = 1): IngestRecord | null {
   if (!m || typeof m.t !== 'number') return null;
@@ -59,6 +69,18 @@ export function wialonMessageToRecord(m: any, _mileageFactor = 1): IngestRecord 
   }
   const prm = m.p ?? {};
   if (typeof prm.hdop === 'number') rec.hdop = prm.hdop;
+  const sensors = paramsToSensors(prm);
+  if (Object.keys(sensors).length) rec.sensors = sensors;
+  // Wialon Local feeds also expose the counters as message parameters: history sync keeps
+  // the same method attribution as the item-level counters.
+  if (typeof prm.engine_hours === 'number' && Number.isFinite(prm.engine_hours) && prm.engine_hours >= 0) {
+    rec.engine_hours = prm.engine_hours;
+    rec.engine_hours_method = 'platform';
+  }
+  if (typeof prm.odometer_km === 'number' && Number.isFinite(prm.odometer_km) && prm.odometer_km >= 0) {
+    rec.odometer_km = prm.odometer_km;
+    rec.odometer_method = 'platform';
+  }
   return rec;
 }
 
@@ -81,6 +103,8 @@ export function wialonUnitToRecords(u: any): IngestRecord[] {
       rec.odometer_km = u.cnm * factor;
       rec.odometer_method = 'platform';
     }
+    const sensors = paramsToSensors(u.lmsg?.p ?? {});
+    if (Object.keys(sensors).length) rec.sensors = sensors;
     if (rec.engine_hours !== undefined || rec.odometer_km !== undefined) out.push(rec);
   }
   return out;

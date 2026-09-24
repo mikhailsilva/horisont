@@ -1,5 +1,5 @@
 // Source of truth for the database schema. Idempotent: safe to run on every cold start.
-export const SCHEMA_VERSION = '4';
+export const SCHEMA_VERSION = '5';
 
 const ROLE_CHECK = `('superadmin', 'admin', 'analyst', 'engineer', 'dispatcher', 'mechanic', 'viewer', 'operator')`;
 const SOURCE_KINDS = `('tracker', 'phone', 'osmand', 'traccar', 'wialon', 'aemp', 'manual')`;
@@ -340,4 +340,16 @@ create table if not exists geofences (
   created_at timestamptz not null default now()
 );
 create index if not exists geofences_org on geofences(org_id);
+
+-- v5: data sources have real states: active → disabled (identifier released, data refused) →
+-- deleted (soft: hidden everywhere, the already received data stays with the machine).
+alter table sources add column if not exists disabled_at timestamptz;
+alter table sources add column if not exists deleted_at timestamptz;
+alter table sources add column if not exists disabled_external_id text;
+-- sources "отключён" under the old scheme become disabled sources with the clean label
+update sources set label = left(label, length(label) - length(' (отключён)')),
+                     disabled_at = now(),
+                     disabled_external_id = external_id,
+                     external_id = case when kind in ('tracker', 'osmand') then null else external_id end
+  where label like '% (отключён)';
 `;

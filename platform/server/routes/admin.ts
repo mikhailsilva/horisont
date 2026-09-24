@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { hashPassword, newInviteCode, newToken, normalizeCode, sha256, validPassword } from '../auth.js';
 import { assertCanAssignRole, assertCanManageUser, assertCap, assertOrgVisible, assertOwnerAdmin, can, visibleOrgIds, type UserPrincipal, type UserTarget } from '../access.js';
 import { bad, forbidden, HttpError, json, notFound, readJson } from '../http.js';
-import { audit, getSetting, ms, router, setSetting, str, user, type Ctx } from '../core.js';
+import { audit, ms, router, str, user, type Ctx } from '../core.js';
 import { cleanOverrides, effectiveBlocks, isRole, legacyRole, rank, ROLES, rolesFor, type Role } from '../domain/roles.js';
 import { orgSubtree, purgeOrgs, purgeUsers, restoreBatch, softDeleteOrg, TRASH_DAYS } from '../purge.js';
 import { ensureDemoTenant } from '../demo.js';
@@ -391,7 +391,6 @@ router.on('GET', '/api/settings', async (c) => {
        from gateway_keys k left join users x on x.id = k.created_by order by k.created_at desc`,
   );
   return json({
-    demo_login: await getSetting(c.db, 'demo_login', { enabled: false }),
     gateway_env_token: !!process.env.GATEWAY_TOKEN,
     gateway_keys: keys.rows,
     read_only: u.is_demo,
@@ -402,10 +401,6 @@ router.on('PATCH', '/api/settings', async (c) => {
   const u = user(c);
   assertOwner(u);
   const b = await readJson(c.req);
-  if (b.demo_login !== undefined) {
-    await setSetting(c.db, 'demo_login', { enabled: !!b.demo_login?.enabled });
-    await audit(c.db, u, 'demo_login', { enabled: !!b.demo_login?.enabled });
-  }
   return json({ ok: true });
 });
 

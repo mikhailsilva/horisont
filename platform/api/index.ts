@@ -1,3 +1,3 @@
-import { handle } from '../server/app.js';
+import { handleWithSimext } from '../server/simext/index.js';
 
-export default { fetch: handle };
+export default { fetch: handleWithSimext };

@@ -316,7 +316,7 @@ export async function refitCalibrations(db: Db, machineId: string, metric: 'engi
   const srcs = await db.query<{ source_id: string; method: CounterMethod }>(
     `select s.id as source_id, c.method from sources s
        cross join lateral (select method from counters where source_id = s.id and metric = $2 order by t desc limit 1) c
-      where s.machine_id = $1`,
+      where s.machine_id = $1 and s.disabled_at is null and s.deleted_at is null`,
     [machineId, metric],
   );
   const rs: Point[] = readings.rows.map((r) => ({ t: Number(r.t), value: Number(r.value) })).reverse();

@@ -18,7 +18,7 @@ router.on('GET', '/api/connectors', async (c) => {
   const r = await c.db.query<any>(
     `select k.id, k.org_id, o.name as org_name, k.kind, k.label, k.base_url, k.status, k.last_error,
             (extract(epoch from k.last_sync_at) * 1000)::float8 as last_sync_at,
-            (select count(*)::int from sources s where s.connector_id = k.id) as units
+            (select count(*)::int from sources s where s.connector_id = k.id and s.deleted_at is null) as units
        from connectors k join orgs o on o.id = k.org_id where k.org_id = any($1::text[]) order by k.created_at`,
     [orgs],
   );

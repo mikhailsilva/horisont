@@ -90,8 +90,22 @@ export async function ensureDemoTenant(db: Db): Promise<{ orgs: number; users: n
       [g.id, g.org, g.name, g.kind, JSON.stringify({ type: 'Polygon', coordinates: [ring] }), polygonArea(ring).areaM2 / 1e4],
     );
   }
-  await db.query(`insert into settings (key, value) values ('demo_login', '{"enabled": true}') on conflict (key) do nothing`);
   return { orgs: fleet.orgs.length, users: fleet.users.length, machines: fleet.machines.length, skipped };
+}
+
+/** Issues real passwords for every demo account (scripts/demo-credentials.ts); returns the logins. */
+export async function setDemoPasswords(db: Db, pick: (login: string) => string): Promise<string[]> {
+  const r = await db.query<{ id: string; login: string }>(
+    `select u.id, u.login from users u join orgs o on o.id = u.org_id
+      where u.protected and o.is_demo and not u.disabled and u.deleted_at is null and o.deleted_at is null
+      order by u.login`,
+  );
+  const logins: string[] = [];
+  for (const { id, login } of r.rows) {
+    await db.query(`update users set pass_hash = $2 where id = $1`, [id, await hashPassword(pick(login))]);
+    logins.push(login);
+  }
+  return logins;
 }
 
 /** Keeps the free database tier small: demo telemetry older than `days` is removed. */

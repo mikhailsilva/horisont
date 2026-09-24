@@ -55,7 +55,7 @@ function rasterStyle(tiles: string[], attribution: string, maxzoom: number): Sty
 function styleFor(base: Base): string | StyleSpecification {
   const theme = getTheme();
   if (base === 'scheme') return theme === 'dark' ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty';
-  if (base === 'satellite') return rasterStyle([ESRI_IMAGERY], ESRI_ATTR, 19);
+  if (base === 'satellite') return rasterStyle([ESRI_IMAGERY], ESRI_ATTR, 17);
   if (base === 'topo')
     return rasterStyle(
       ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'],
@@ -71,7 +71,7 @@ function localize(m: MlMap, base: Base) {
   const style = m.getStyle();
   if (base === 'hybrid') {
     // satellite under the vector roads and Russian labels of the OSM style
-    m.addSource('sat', { type: 'raster', tiles: [ESRI_IMAGERY], tileSize: 256, attribution: ESRI_ATTR, maxzoom: 19 });
+    m.addSource('sat', { type: 'raster', tiles: [ESRI_IMAGERY], tileSize: 256, attribution: ESRI_ATTR, maxzoom: 17 });
     const first = style.layers.find((l) => l.type !== 'background')?.id;
     m.addLayer({ id: 'sat', type: 'raster', source: 'sat' }, first);
     for (const l of style.layers as any[]) {
@@ -174,7 +174,10 @@ export function GisMap({
   pick.current = onPick;
   const toolRef = useRef(tool);
   toolRef.current = tool;
-  const fitted = useRef('');
+  // the camera auto-fits only once per scope (first data load) or on an explicit button
+  const scopeRef = useRef<string | null>(null);
+  const hadInScope = useRef(false);
+  const allRef = useRef<Array<[number, number]>>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -283,11 +286,18 @@ export function GisMap({
         ? geofences.map((g) => ({ type: 'Feature', geometry: g.geometry, properties: { kind: g.kind, label: `${g.name}${g.area_ha ? ` · ${g.area_ha.toFixed(1)} га` : ''}` } }))
         : [],
     });
-    const all = [...track.map((p) => [p.lon, p.lat]), ...markers.map((p) => [p.lon, p.lat])];
-    const key = fitKey ?? (all.length ? `${all.length}:${all[0]}:${all[all.length - 1]}` : '');
-    if (all.length && key !== fitted.current) {
-      fitted.current = key;
-      if (all.length === 1) m.jumpTo({ center: all[0] as [number, number], zoom: 13 });
+    const all = [...track.map((p) => [p.lon, p.lat]), ...markers.map((p) => [p.lon, p.lat])] as Array<[number, number]>;
+    allRef.current = all;
+    // fitKey is an explicit scope (page, selected range); a change means a new object to show
+    const scope = fitKey ?? '';
+    if (scope !== scopeRef.current) {
+      scopeRef.current = scope;
+      hadInScope.current = false;
+    }
+    if (!all.length) hadInScope.current = false;
+    else if (!hadInScope.current) {
+      hadInScope.current = true;
+      if (all.length === 1) m.jumpTo({ center: all[0], zoom: 13 });
       else {
         const lons = all.map((c) => c[0]);
         const lats = all.map((c) => c[1]);
@@ -295,6 +305,18 @@ export function GisMap({
       }
     }
   }, [markers, track, stops, geofences, showGf, gen, fitKey]);
+
+  const fitAll = () => {
+    const m = map.current;
+    const all = allRef.current;
+    if (!m || !all.length) return;
+    if (all.length === 1) m.jumpTo({ center: all[0], zoom: 13 });
+    else {
+      const lons = all.map((c) => c[0]);
+      const lats = all.map((c) => c[1]);
+      m.fitBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 48, maxZoom: 15, duration: 600 });
+    }
+  };
 
   useEffect(() => {
     const m = map.current;
@@ -365,6 +387,9 @@ export function GisMap({
         </button>
         <button className={btn(false)} onClick={fullscreen} title="Во весь экран">
           <Maximize2 className="h-3.5 w-3.5" />
+        </button>
+        <button className={btn(false)} onClick={fitAll} title="Показать все объекты">
+          Показать всё
         </button>
       </div>
       {layersOpen && (

@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { call, iso } from './helpers.js';
 import { getDb } from '../server/db.js';
-import { ensureDemoTenant } from '../server/demo.js';
+import { ensureDemoTenant, setDemoPasswords } from '../server/demo.js';
 import { polygonArea } from '../server/domain/geodesy.js';
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'pglite:memory';
@@ -295,36 +295,44 @@ describe('roles, visibility, trash, demo, stand, Traccar Client', () => {
     expect((await call('POST', `/api/stand/commands/${cmd.data.id}/result`, { ok: true, message: 'ok' }, process.env.GATEWAY_TOKEN)).status).toBe(200);
   });
 
-  it('the demo tenant has one-click accounts confined to demo data', async () => {
+  it('the demo tenant has real passwords and accounts confined to demo data', async () => {
     const db = await getDb();
     const res = await ensureDemoTenant(db);
     expect(res.skipped).toEqual([]);
-    const list = await call('GET', '/api/demo');
-    expect(list.data.enabled).toBe(true);
-    expect(list.data.accounts.map((a: any) => a.role)).toEqual(expect.arrayContaining(['superadmin', 'admin', 'analyst', 'engineer', 'dispatcher', 'mechanic', 'viewer', 'operator']));
-    const demoOwner = (await call('POST', '/api/auth/demo', { login: 'demo-owner' })).data.token;
+    // demo accounts are ordinary login accounts now: the demo endpoints are gone
+    expect((await call('GET', '/api/demo')).status).toBe(404);
+    expect((await call('POST', '/api/auth/demo', { login: 'demo-owner' })).status).toBe(404);
+    const pw = new Map<string, string>();
+    await setDemoPasswords(db, (login) => {
+      const p = 'demo-pass-' + login.slice(-4);
+      pw.set(login, p);
+      return p;
+    });
+    const demoLogin = async (login: string) =>
+      (await call('POST', '/api/auth/login', { login, password: pw.get(login) })).data.token;
+    const demoOwner = await demoLogin('demo-owner');
     const orgs = await call('GET', '/api/orgs', undefined, demoOwner);
     expect(orgs.data.orgs.every((o: any) => o.is_demo)).toBe(true);
     expect(orgs.data.orgs.map((o: any) => o.name)).not.toContain('Кубань');
     expect((await call('POST', '/api/gateway-keys', { label: 'x' }, demoOwner)).status).toBe(403);
-    const kubanAdmin = (await call('POST', '/api/auth/demo', { login: 'demo-kuban-admin' })).data.token;
+    const kubanAdmin = await demoLogin('demo-kuban-admin');
     const kubanOrg = orgs.data.orgs.find((o: any) => o.name.includes('Кубань-Агро')).id;
     const disp = await userId(kubanOrg, 'demo-dispatcher', kubanAdmin);
     expect((await call('DELETE', `/api/users/${disp}`, undefined, kubanAdmin)).status).toBe(403);
     expect((await call('POST', '/api/auth/password', { old_password: 'x', new_password: 'yyyyyyyyy' }, kubanAdmin)).status).toBe(403);
-    const oper = (await call('POST', '/api/auth/demo', { login: 'demo-operator' })).data.token;
+    const oper = await demoLogin('demo-operator');
     expect((await call('GET', '/api/machines', undefined, oper)).data.machines).toHaveLength(1);
     // a demo visitor deletes a demo machine; the nightly run brings it back
     const machines = (await call('GET', '/api/machines', undefined, kubanAdmin)).data.machines;
     await call('DELETE', `/api/machines/${machines[0].id}`, undefined, kubanAdmin);
     await ensureDemoTenant(db);
     expect((await call('GET', '/api/machines', undefined, kubanAdmin)).data.machines).toHaveLength(machines.length);
-    expect((await call('POST', '/api/auth/demo', { login: 'owner' })).status).toBe(404);
+    expect((await call('POST', '/api/auth/login', { login: 'demo-owner', password: 'wrong-password' })).status).toBe(401);
     // only the real superadmin (re)creates the demo tenant from the settings page
     expect((await call('POST', '/api/settings/demo-tenant', {}, demoOwner)).status).toBe(403);
     const again = await call('POST', '/api/settings/demo-tenant', {}, T.super);
     expect(again.status).toBe(200);
-    expect(again.data).toMatchObject({ orgs: 8, machines: 12, skipped: [] });
+    expect(again.data).toMatchObject({ orgs: 8, machines: 9, skipped: [] });
   });
 
   it('machines archived before the trash existed are never purged automatically', async () => {

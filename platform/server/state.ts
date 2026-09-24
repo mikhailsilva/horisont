@@ -95,12 +95,13 @@ export async function summarize(db: Db, ids: string[], viewer: Viewer, now = Dat
            select distinct on (metric) metric, value, method, t from counters
             where source_id = s.id order by metric, t desc
          ) c
-        where s.machine_id = any($1::text[])`,
+        where s.machine_id = any($1::text[]) and s.disabled_at is null and s.deleted_at is null`,
       [ids],
     ),
     db.query<any>(
       `select c.source_id, c.metric, c.scale, c.offset_value, c.basis from calibrations c
-         join sources s on s.id = c.source_id where s.machine_id = any($1::text[])`,
+         join sources s on s.id = c.source_id
+        where s.machine_id = any($1::text[]) and s.disabled_at is null and s.deleted_at is null`,
       [ids],
     ),
     db.query<any>(
@@ -116,7 +117,7 @@ export async function summarize(db: Db, ids: string[], viewer: Viewer, now = Dat
     ),
     db.query<any>(
       `select id, machine_id, kind, label, (extract(epoch from last_seen_at) * 1000)::float8 as last_seen_at
-         from sources where machine_id = any($1::text[]) order by created_at`,
+         from sources where machine_id = any($1::text[]) and deleted_at is null order by created_at`,
       [ids],
     ),
     latestSensors(db, ids),

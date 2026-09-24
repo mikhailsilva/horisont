@@ -62,7 +62,11 @@ router.on('POST', '/api/stand/report', async (c) => {
   );
   const imeis: string[] = (b.machines ?? []).map((m: any) => String(m?.imei ?? '')).filter(Boolean);
   const known = imeis.length
-    ? (await c.db.query<any>(`select external_id from sources where kind = 'tracker' and external_id = any($1::text[]) and machine_id is not null`, [imeis])).rows.map((r) => r.external_id)
+    ? (await c.db.query<any>(
+        `select external_id from sources where kind = 'tracker' and external_id = any($1::text[]) and machine_id is not null
+            and disabled_at is null and deleted_at is null`,
+        [imeis],
+      )).rows.map((r) => r.external_id)
     : [];
   const live = !!prev.rows[0]?.live || cmds.rows.length > 0;
   return json({ commands: cmds.rows, known_imeis: known, live, poll_ms: live ? LIVE_MS : ECO_MS });
@@ -81,7 +85,7 @@ async function imeiMap(c: Ctx, u: UserPrincipal, imeis: string[]) {
   const r = await c.db.query<any>(
     `select s.external_id as imei, m.id as machine_id, m.name, m.org_id, o.name as org_name, o.is_demo, m.archived
        from sources s join machines m on m.id = s.machine_id join orgs o on o.id = m.org_id
-      where s.kind = 'tracker' and s.external_id = any($1::text[])`,
+      where s.kind = 'tracker' and s.external_id = any($1::text[]) and s.disabled_at is null and s.deleted_at is null`,
     [imeis],
   );
   const out = new Map<string, any>();

@@ -13,9 +13,11 @@ router.on('POST', '/api/devices/enroll', async (c) => {
   if (code.length !== 6) throw bad('bad_code', 'Код — 6 цифр');
   const token = newToken();
   const s = await c.db.tx(async (db) => {
-    const r = await db.query<any>(`select id, machine_id from sources where enroll_code_hash = $1 and enroll_expires_at > now() for update`, [
-      sha256('pair:' + code),
-    ]);
+    const r = await db.query<any>(
+      `select id, machine_id from sources where enroll_code_hash = $1 and enroll_expires_at > now()
+          and disabled_at is null and deleted_at is null for update`,
+      [sha256('pair:' + code)],
+    );
     if (!r.rows[0]) throw bad('bad_code', 'Код неверный или истёк. Получите новый код на странице машины');
     await db.query(`update sources set token_hash = $2, enroll_code_hash = null, enroll_expires_at = null where id = $1`, [r.rows[0].id, sha256(token)]);
     return r.rows[0];
@@ -74,7 +76,11 @@ router.on('POST', '/api/ingest', async (c) => {
   const records: any[] = Array.isArray(b.records) ? b.records : [];
   if (records.length > 20000) throw new HttpError(413, 'too_many', 'Не более 20000 записей за запрос');
   if (c.p.kind === 'device') {
-    const s = (await c.db.query<any>(`select id, machine_id, org_id, kind from sources where id = $1`, [c.p.source_id])).rows[0];
+    const s = (await c.db.query<any>(
+      `select id, machine_id, org_id, kind from sources where id = $1 and disabled_at is null and deleted_at is null`,
+      [c.p.source_id],
+    )).rows[0];
+    if (!s) throw new HttpError(401, 'unauthorized');
     const res = await ingestForSource(c.db, s, records as IngestRecord[]);
     return json({ ...res, config: await deviceConfig(c.db, s.id) });
   }
@@ -88,7 +94,11 @@ router.on('POST', '/api/ingest', async (c) => {
     });
     const results: any[] = [];
     for (const [ext, list] of byExt) {
-      const s = (await c.db.query<any>(`select id, machine_id, org_id, kind from sources where kind = 'tracker' and external_id = $1`, [ext])).rows[0];
+      const s = (await c.db.query<any>(
+        `select id, machine_id, org_id, kind from sources where kind = 'tracker' and external_id = $1
+            and disabled_at is null and deleted_at is null`,
+        [ext],
+      )).rows[0];
       if (!s || !s.machine_id) {
         results.push({ ext_id: ext, status: 'unknown_device', indexes: list.map((x) => x.i) });
         continue;
@@ -179,7 +189,10 @@ async function osmand(c: import('../core.js').Ctx) {
   }
   const id = items[0]?.id;
   if (!id) throw bad('no_id', 'Нет идентификатора устройства (id)');
-  const s = (await c.db.query<any>(`select id, machine_id, org_id, kind from sources where kind = 'osmand' and external_id = $1`, [id])).rows[0];
+  const s = (await c.db.query<any>(
+    `select id, machine_id, org_id, kind from sources where kind = 'osmand' and external_id = $1 and disabled_at is null and deleted_at is null`,
+    [id],
+  )).rows[0];
   // not found → the client keeps the point in its buffer and retries (Traccar answers the same way)
   if (!s) return json({ error: 'unknown_device', message: 'Устройство с таким идентификатором не подключено' }, 404);
   const res = await ingestForSource(c.db, s, items.map((x) => x.rec));

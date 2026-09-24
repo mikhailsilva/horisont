@@ -5,5 +5,6 @@ import './routes/machines.js';
 import './routes/devices.js';
 import './routes/connectors.js';
 import './routes/stand.js';
+import './simext/push.js';
 
 export { APP_VERSION, readCookie, router, type Ctx } from './core.js';

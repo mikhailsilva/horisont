@@ -1,8 +1,8 @@
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { hashPassword, normalizeCode, sha256, validLogin, validPassword, verifyPassword } from '../auth.js';
 import { bad, forbidden, HttpError, json, readJson } from '../http.js';
-import { APP_VERSION, audit, createSession, getSetting, meView, readCookie, router, SESSION_DAYS, sessionCookie, str, user } from '../core.js';
-import { ROLES, legacyRole } from '../domain/roles.js';
+import { APP_VERSION, audit, createSession, meView, readCookie, router, SESSION_DAYS, sessionCookie, str, user } from '../core.js';
+import { legacyRole } from '../domain/roles.js';
 
 router.on('GET', '/api/health', async (c) => {
   await c.db.query('select 1');
@@ -117,37 +117,3 @@ router.on('POST', '/api/auth/password', async (c) => {
   return json({ token }, 200, { 'set-cookie': sessionCookie(c, token, SESSION_DAYS * 86400) });
 });
 
-// ---------------------------------------------------------------- public demo access
-
-/** Demo accounts shown on the login page: protected users of the demo tenant, no passwords needed. */
-router.on('GET', '/api/demo', async (c) => {
-  const enabled = await getSetting(c.db, 'demo_login', { enabled: false });
-  if (!enabled?.enabled) return json({ enabled: false, accounts: [] });
-  const r = await c.db.query<any>(
-    `select u.login, u.role, u.label, o.name as org_name, o.kind as org_kind
-       from users u join orgs o on o.id = u.org_id
-      where o.is_demo and u.protected and not u.disabled and u.deleted_at is null and o.deleted_at is null
-      order by case o.kind when 'fuchs' then 0 when 'distributor' then 1 else 2 end, o.name, u.login`,
-  );
-  return json({
-    enabled: true,
-    accounts: r.rows.map((a) => {
-      const role = legacyRole(a.role, a.org_kind);
-      return { login: a.login, role, role_label: ROLES[role].label, summary: ROLES[role].summary, label: a.label, org_name: a.org_name, org_kind: a.org_kind };
-    }),
-  });
-});
-
-router.on('POST', '/api/auth/demo', async (c) => {
-  const enabled = await getSetting(c.db, 'demo_login', { enabled: false });
-  if (!enabled?.enabled) throw forbidden('Демо-доступ выключен');
-  const b = await readJson(c.req);
-  const r = await c.db.query<any>(
-    `select u.id from users u join orgs o on o.id = u.org_id
-      where u.login = $1 and o.is_demo and u.protected and not u.disabled and u.deleted_at is null and o.deleted_at is null`,
-    [String(b.login ?? '')],
-  );
-  if (!r.rows[0]) throw new HttpError(404, 'not_found', 'Нет такой демо-учётной записи');
-  const token = await createSession(c, r.rows[0].id);
-  return json({ token, user: await meView(c.db, r.rows[0].id) }, 200, { 'set-cookie': sessionCookie(c, token, SESSION_DAYS * 86400) });
-});

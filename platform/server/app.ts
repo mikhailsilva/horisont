@@ -47,7 +47,7 @@ async function principal(db: Db, req: Request): Promise<{ p: Principal | null; v
       viaCookie,
     };
   }
-  const d = await db.query<any>(`select id, machine_id, org_id from sources where token_hash = $1`, [h]);
+  const d = await db.query<any>(`select id, machine_id, org_id from sources where token_hash = $1 and disabled_at is null and deleted_at is null`, [h]);
   if (d.rows[0]) return { p: { kind: 'device', source_id: d.rows[0].id, machine_id: d.rows[0].machine_id, org_id: d.rows[0].org_id }, viaCookie: false };
   const k = await db.query<any>(`select id, label from gateway_keys where key_hash = $1 and revoked_at is null`, [h]);
   if (k.rows[0]) {

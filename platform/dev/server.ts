@@ -5,8 +5,8 @@
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
-import { handle } from '../server/app.js';
 import { sendWebResponse, toWebRequest } from '../server/node-adapter.js';
+import { handleWithSimext } from '../server/simext/index.js';
 
 const port = Number(process.env.PORT ?? 8787);
 process.env.DATABASE_URL ??= 'pglite:' + path.resolve('.data/pg');
@@ -57,11 +57,12 @@ async function serveStatic(pathname: string, res: http.ServerResponse) {
 http
   .createServer(async (req, res) => {
     try {
-      if ((req.url ?? '/').startsWith('/api/')) {
-        await sendWebResponse(await handle(await toWebRequest(req)), res);
+      const path = req.url ?? '/';
+      if (path.startsWith('/api/') || path.startsWith('/ext/')) {
+        await sendWebResponse(await handleWithSimext(await toWebRequest(req)), res);
         return;
       }
-      const url = new URL(req.url ?? '/', 'http://localhost');
+      const url = new URL(path, 'http://localhost');
       await serveStatic(url.pathname, res);
     } catch (e) {
       console.error(e);

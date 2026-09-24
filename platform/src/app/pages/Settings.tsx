@@ -29,15 +29,7 @@ export function Settings({ me }: { me: Me }) {
       {d && (
         <>
           <section className="card space-y-3 p-5">
-            <h2 className="font-semibold">Демо-доступ на странице входа</h2>
-            <p className="text-sm text-muted-foreground">
-              Кнопки входа под демо-учётками всех ролей. Демо-учётки видят только демо-организации, не меняют пароли и не могут удалить друг друга; ночью демо
-              восстанавливается.
-            </p>
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" disabled={ro} checked={!!d.demo_login?.enabled} onChange={(e) => act(() => api('PATCH', '/api/settings', { demo_login: { enabled: e.target.checked } }))} />
-              показывать демо-доступ
-            </label>
+            <h2 className="font-semibold">Демо-тенант</h2>
             {!ro && (
               <div className="flex flex-wrap items-center gap-3">
                 <button
