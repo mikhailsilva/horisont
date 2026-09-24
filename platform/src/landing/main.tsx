@@ -2,11 +2,11 @@ import { createRoot } from 'react-dom/client';
 import '../styles.css';
 import { ThemeToggle } from '../app/main-toggle';
 
-const REL = 'https://github.com/clutteredcal/ITles/releases/download/v0.3.0';
+const WINDOWS_ZIP = 'https://github.com/raulwulff6769/framework-lab/releases/download/desktop-2026.09.24/ITles-Windows-x64-0.3.0.zip';
 const ANDROID_APK = 'https://github.com/raulwulff6769/framework-lab/releases/download/android-2026.09.24/itles-android.apk';
 const DOWNLOADS = [
   { os: 'Android', file: ANDROID_APK, note: 'Кабинет и «Телефон в кабине» с фоновой геолокацией (работает при выключенном экране). APK, Android 7+.' },
-  { os: 'Windows', file: `${REL}/ITles-Windows-x64.zip`, note: 'Windows 10/11 x64: распакуйте и запустите ITles.exe.' },
+  { os: 'Windows', file: WINDOWS_ZIP, note: 'ПК, Windows 10/11 x64: распакуйте ZIP и запустите ITles.exe. Вход — те же логины и пароли.' },
   { os: 'iPhone / iPad', file: './app/', note: 'Кабинет: Safari → «Поделиться» → «На экран Домой». Для GPS в фоне — Traccar Client из App Store.' },
   { os: 'Веб-кабинет', file: './app/', note: 'Любой браузер, без установки.' },
 ];
@@ -125,8 +125,9 @@ function Landing() {
         <div className="mx-auto max-w-6xl px-6 py-14">
           <h2 className="text-2xl font-semibold tracking-tight">Скачать</h2>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            APK для Android — <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/tag/android-2026.09.24">сборка 24.09.2026</a> из текущих исходников. Windows ZIP — прежняя сборка v0.3.0 из{' '}
-            <a className="underline" href="https://github.com/clutteredcal/ITles/releases/tag/v0.3.0">другой копии ITles</a>, не из текущего коммита.
+            APK для Android и ZIP для Windows — сборки 24.09.2026 из текущих исходников:{' '}
+            <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/tag/android-2026.09.24">Android</a>,{' '}
+            <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/tag/desktop-2026.09.24">Windows</a>.
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {DOWNLOADS.map((d) => (
