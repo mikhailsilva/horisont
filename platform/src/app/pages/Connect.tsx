@@ -16,10 +16,12 @@ const KINDS = [
   {
     kind: 'traccar',
     title: 'Traccar',
-    hint: 'Открытый сервер мониторинга. Токен: профиль пользователя Traccar → «Токен».',
+    hint: 'Открытый сервер мониторинга. Войдите e-mail и паролем пользователя Traccar, которого вам выдала компания (лучше — с правом только чтения), или токеном: профиль пользователя Traccar → «Токен».',
     fields: [
       ['base_url', 'Адрес сервера', 'https://traccar.example.ru'],
-      ['token', 'Токен', ''],
+      ['email', 'E-mail пользователя Traccar', 'name@company.ru', 'opt'],
+      ['password', 'Пароль', '', 'opt'],
+      ['token', 'или токен (вместо e-mail и пароля)', '', 'opt'],
     ],
   },
   {
@@ -28,7 +30,9 @@ const KINDS = [
     hint: 'Стандартный API телематики производителей техники: местоположение, моточасы и пробег в одном формате.',
     fields: [
       ['base_url', 'Адрес снимка парка (Fleet)', 'https://api.oem.example/Fleet/1'],
-      ['token', 'Bearer-токен', ''],
+      ['username', 'Логин API', '', 'opt'],
+      ['password', 'Пароль API', '', 'opt'],
+      ['token', 'или Bearer-токен (вместо логина и пароля)', '', 'opt'],
     ],
   },
 ];
@@ -53,6 +57,11 @@ export function Connect({ me }: { me: Me }) {
   const k = KINDS.find((x) => x.kind === kind)!;
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const login = f.email || f.username;
+    if (kind !== 'wialon' && !f.token && !(login && f.password)) {
+      setErr(new Error('Укажите логин и пароль или токен'));
+      return;
+    }
     setBusy(true);
     setErr(null);
     setOk(null);
@@ -106,7 +115,7 @@ export function Connect({ me }: { me: Me }) {
         <form onSubmit={submit} className="card space-y-4 p-5">
           <div className="flex flex-wrap gap-2">
             {KINDS.map((x) => (
-              <button type="button" key={x.kind} onClick={() => setKind(x.kind)} className={`rounded-xl px-3 py-2 text-sm font-medium ${kind === x.kind ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
+              <button type="button" key={x.kind} onClick={() => { setKind(x.kind); setF((v) => ({ org_id: v.org_id ?? '' })); setErr(null); setOk(null); }} className={`rounded-xl px-3 py-2 text-sm font-medium ${kind === x.kind ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
                 {x.title}
               </button>
             ))}
@@ -127,10 +136,18 @@ export function Connect({ me }: { me: Me }) {
               ))}
             </select>
           )}
-          {k.fields.map(([name, label, ph]) => (
+          {k.fields.map(([name, label, ph, opt]) => (
             <div key={name}>
               <label className="label">{label}</label>
-              <input className="input" placeholder={ph} value={f[name] ?? ''} onChange={(e) => setF({ ...f, [name]: e.target.value })} required />
+              <input
+                className="input"
+                type={name === 'password' || name === 'token' ? 'password' : 'text'}
+                autoComplete={name === 'password' ? 'current-password' : 'off'}
+                placeholder={ph}
+                value={f[name] ?? ''}
+                onChange={(e) => setF({ ...f, [name]: e.target.value })}
+                required={!opt}
+              />
             </div>
           ))}
           <ErrorLine e={err} />
