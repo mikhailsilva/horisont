@@ -205,7 +205,7 @@ class Stand:
         os.replace(tmp, self.cfg.state_file)
 
     # ------------------------------------------------------------------ history / catch-up
-    def fast_forward(self, t0: int, t1: int, step: int = 10, flush_every: int = 4 * 3600) -> None:
+    def fast_forward(self, t0: int, t1: int, step: int = 10, flush_every: int = 12 * 3600) -> None:
         """Simulate [t0, t1) quickly; the trackers deliver it as black-box archive over the same TCP paths."""
         moving, parked, turn, turn_dt, dist, full = ECO_POLICY
         for x in self.units:
@@ -423,6 +423,25 @@ class Stand:
             except Exception as e:  # the result is informational; the command already ran
                 log.warning("command result: %s", e)
 
+    def _unpark(self, imeis: set[str]) -> None:
+        """An IMEI was just bound to a machine in ITles: the gateway retries its parked archive now, not within the hour."""
+        path = os.environ.get("QUEUE_PATH")
+        if not imeis or not path or not os.path.exists(path):
+            return
+        try:
+            from gateway.itles_gateway.queue import DurableQueue
+
+            q = DurableQueue(path)
+            try:
+                n = q.unpark(sorted(imeis))
+            finally:
+                q.close()
+        except Exception as e:  # monitoring aid only; the gateway retries parked records on its own
+            log.warning("unpark: %s", e)
+            return
+        if n:
+            self.log.add("conn", f"IMEI {', '.join(sorted(imeis))} привязан в ITles — шлюз досылает архив из очереди ({n} зап.)")
+
     def report_loop(self) -> None:
         if not self.api:
             return
@@ -437,7 +456,9 @@ class Stand:
                 resp = self.api.post("/api/stand/report", body)
                 self.report_error, self.last_report_ok = None, time.time()
                 self.set_mode("live" if resp.get("live") else "eco")
-                self.known = set(resp.get("known_imeis") or [])
+                known = set(resp.get("known_imeis") or [])
+                self._unpark(known - self.known)
+                self.known = known
                 cmds = resp.get("commands") or []
                 for c in cmds:
                     self.run_command(c)
