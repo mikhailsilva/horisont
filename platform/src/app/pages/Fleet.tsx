@@ -97,11 +97,11 @@ export function Fleet({ me }: { me: Me }) {
   const past = useAsync(() => (at ? api('GET', `/api/fleet/at?t=${new Date(at).toISOString()}`) : Promise.resolve(null)), [at]);
   useEffect(() => {
     const t = setInterval(async () => {
-      await api('POST', '/api/refresh').catch(() => {});
+      if (can(me, 'connectors.manage')) await api('POST', '/api/refresh').catch(() => {});
       setTick((x) => x + 1);
     }, 30_000);
     return () => clearInterval(t);
-  }, []);
+  }, [me.role]);
   const machines: any[] = res.data?.machines ?? [];
   const shown = machines.filter((m) => !q || `${m.name} ${m.org_name} ${m.make ?? ''} ${m.model ?? ''}`.toLowerCase().includes(q.toLowerCase()));
   const markers: GisMarker[] = useMemo(() => {

@@ -588,11 +588,11 @@ router.on('POST', '/api/machines/:id/sources', async (c, { id }) => {
     const code = newPairingCode();
     await c.db.query(
       `insert into sources (id, org_id, machine_id, kind, label, enroll_code_hash, enroll_expires_at)
-       values ($1, $2, $3, 'phone', $4, $5, now() + interval '24 hours')`,
+       values ($1, $2, $3, 'phone', $4, $5, now() + interval '2 hours')`,
       [sid, m.org_id, id, str(b.label, 80) ?? 'Телефон в кабине', sha256('pair:' + code)],
     );
     await audit(c.db, u, 'source_added', { machine: id, kind: 'phone' }, m.org_id);
-    return json({ source_id: sid, pairing_code: code, expires_in_hours: 24 }, 201);
+    return json({ source_id: sid, pairing_code: code, expires_in_hours: 2 }, 201);
   }
   if (b.kind === 'osmand') {
     const ext = newOsmandId();
@@ -634,10 +634,10 @@ router.on('POST', '/api/sources/:id/pairing', async (c, { id }) => {
   await assertCap(c.db, u, 'sources.manage', m.org_id);
   const code = newPairingCode();
   await c.db.query(
-    `update sources set enroll_code_hash = $2, enroll_expires_at = now() + interval '24 hours', token_hash = null where id = $1`,
+    `update sources set enroll_code_hash = $2, enroll_expires_at = now() + interval '2 hours', token_hash = null where id = $1`,
     [id, sha256('pair:' + code)],
   );
-  return json({ pairing_code: code, expires_in_hours: 24 });
+  return json({ pairing_code: code, expires_in_hours: 2 });
 });
 
 function sourceRow(c: Ctx, id: string) {
@@ -687,11 +687,11 @@ router.on('POST', '/api/sources/:id/enable', async (c, { id }) => {
     [id],
   );
   // a re-enabled phone needs a fresh pairing: the code from before the disable is void
-  const pairing = s.kind === 'phone' ? { pairing_code: null as string | null, expires_in_hours: 24 } : null;
+  const pairing = s.kind === 'phone' ? { pairing_code: null as string | null, expires_in_hours: 2 } : null;
   if (pairing) {
     const code = newPairingCode();
     await c.db.query(
-      `update sources set enroll_code_hash = $2, enroll_expires_at = now() + interval '24 hours', token_hash = null where id = $1 and deleted_at is null`,
+      `update sources set enroll_code_hash = $2, enroll_expires_at = now() + interval '2 hours', token_hash = null where id = $1 and deleted_at is null`,
       [id, sha256('pair:' + code)],
     );
     pairing.pairing_code = code;

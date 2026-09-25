@@ -211,7 +211,7 @@ function SourcesBlock({ id, sources, canManage, onChange }: { id: string; source
       {pair && (
         <Modal title="Сопряжение телефона" onClose={() => setPair(null)}>
           <p className="text-sm text-muted-foreground">
-            Откройте ссылку на телефоне (Safari на iPhone, Chrome на Android) или введите код на странице «Телефон в кабине». Код действует 24 часа и
+            Откройте ссылку на телефоне (Safari на iPhone, Chrome на Android) или введите код на странице «Телефон в кабине». Код действует 2 часа и
             подходит один раз. Для работы с выключенным экраном используйте приложение ITles для Android или Traccar Client.
           </p>
           <div className="my-5 text-center font-mono text-5xl font-bold tracking-[0.3em] text-primary">{pair.code}</div>

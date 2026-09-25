@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # One-time setup of the gateway + live stand on a Debian/Ubuntu server (systemd not required).
-#   curl -fsSL https://raw.githubusercontent.com/<owner>/<repo>/<ref>/stand/install.sh | REF=<ref> bash
+#   curl -fsSL https://raw.githubusercontent.com/mikhailsilva/horisont/<ref>/stand/install.sh | REF=<ref> bash
 set -euo pipefail
-REPO=${REPO:-https://github.com/raulwulff6769/framework-lab.git}
+REPO=${REPO:-https://github.com/mikhailsilva/horisont.git}
 DIR=${DIR:-/opt/itles}
 if ! command -v git >/dev/null || ! command -v python3 >/dev/null; then
   apt-get update -y && apt-get install -y --no-install-recommends git python3 ca-certificates

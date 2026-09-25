@@ -41,7 +41,7 @@ export function newInviteCode(): string {
 
 export const normalizeCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
-/** 6 digits for pairing a phone in the cab (typed on a small screen), valid 24 h. */
+/** Six digits for pairing a phone; the source determines when the code expires. */
 export const newPairingCode = () => String(randomInt(0, 1_000_000)).padStart(6, '0');
 
 export function validLogin(login: unknown): login is string {

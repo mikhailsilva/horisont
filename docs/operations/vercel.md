@@ -7,6 +7,19 @@ Vercel (`list_projects`, `get_project`, `list_deployments`, `get_deployment`,
 `https://itles.vercel.app/`, `/api/health`, `/api/setup/status`. Значения переменных
 не сохранялись. Номера MCP-серверов пересматривать по [skill](../../.agents/skills/mcp-servers/SKILL.md).
 
+> **Перенос 25.09.2026.** Рабочий репозиторий — [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont):
+> дерево исходников с изменениями PR #5 импортировано из `raulwulff6769/framework-lab`
+> через squash-слияние [PR #1](https://github.com/mikhailsilva/horisont/pull/1). Исходные
+> Git-предки не входят в ветку по умолчанию; полная история доступна по
+> [архивному тегу `archive/framework-lab-pr5-2026.09.25`](https://github.com/mikhailsilva/horisont/tree/archive/framework-lab-pr5-2026.09.25)
+> в том же репозитории (дерево совпадает с импортом).
+> Действующий production это не затронуло: по последней проверке 24.09
+> `itles.vercel.app` обслуживает выпуск, собранный из framework-lab по закреплённому SHA.
+> Исторические APK и Windows ZIP перенесены отдельными prerelease без пересборки;
+> production-базу и деплой Vercel перенос не затронул. Безопасная проверка нового кода — локальная сборка
+> `pnpm --dir platform build:vercel`, локальное превью и изолированный Preview
+> с синтетическими данными (шаги 3–4 раздела «Процедура изменения» ниже).
+
 ## Текущее, не обещание будущей доступности
 
 - Существующий проект **`itles`** в Vercel: канонический домен `itles.vercel.app`
@@ -29,7 +42,11 @@ Vercel (`list_projects`, `get_project`, `list_deployments`, `get_deployment`,
 
 ## 24.09.2026: выпуск из framework-lab
 
-Выполнено с явного согласия владельца; значения секретов не выводились.
+Историческая запись: источником тогда был `raulwulff6769/framework-lab`; с 25.09
+этот код (включая PR #5) есть в основной ветке `mikhailsilva/horisont`, а исходная
+история доступна по архивному тегу выше, не как предки основной ветки. Production
+остаётся на закреплённом SHA выпуска 24.09. Выполнено с явного
+согласия владельца; значения секретов не выводились.
 
 1. Резервная копия: `pg_dump` **18.6** (сервер Neon — PostgreSQL 18.6; клиент 16 отказывается) в формате custom и plain,
    хранится только в песочнице агента. Долговременный откат данных — восстановление Neon на момент
@@ -65,8 +82,9 @@ PostgreSQL pool (до 3 соединений на экземпляр); для se
 
 ## Процедура изменения (только с согласия владельца)
 
-1. **Перед изменением.** Сверить выбранный владельцем GitHub
-   `somemateria/biildfe4`, назначенную ветку по умолчанию, целевой PR/коммит
+1. **Перед изменением.** Сверить выбранный владельцем GitHub — актуальный рабочий
+   репозиторий [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont), —
+   назначенную ветку по умолчанию, целевой PR/коммит
    (если PR возможен) и состояние `itles` через действующий MCP; проверить
    доступность canonical domain, статистику ошибок, список переменных **только
    по именам** и области production/preview. Не отправлять в issue значения
@@ -82,7 +100,9 @@ PostgreSQL pool (до 3 соединений на экземпляр); для se
 3. **Сборка и привязка.** Локально `pnpm --dir platform install --frozen-lockfile`,
    `pnpm --dir platform typecheck`, `pnpm --dir platform test`,
    `pnpm --dir platform build:vercel`. В настройках **существующего** проекта
-   связать GitHub с `somemateria/biildfe4`; указать согласованную production
+   связать GitHub с актуальным рабочим репозиторием
+   [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont) (не с upstream
+   `framework-lab`); указать согласованную production
    branch **только после её появления и проверки**, корневую директорию
    **`platform/`**. Сверить команду сборки и поведение
    Build Output API на **Preview**; новый корневой `package.json` предназначен
@@ -94,8 +114,10 @@ PostgreSQL pool (до 3 соединений на экземпляр); для se
    setup/login/API выполняются **только в изолированной среде**, геолокация
    отключается до сохранения и cron не выдаёт данные без авторизации.
    Повторить сценарий `scripts/gateway_e2e.py` **локально**; он не должен
-   отправлять модельные данные в production. Проверить ссылку на файлы релиза
-   нового GitHub и адаптивный интерфейс в браузере.
+   отправлять модельные данные в production. Проверить ссылки на файлы релизов —
+   сборки 24.09 (`android-2026.09.24`, `desktop-2026.09.24`) указывают на
+   исторические prerelease в `mikhailsilva/horisont`, а не на текущую сборку, — и адаптивный
+   интерфейс в браузере.
 5. **Production и откат.** Только после разрешения владельца перенести
    проверенный коммит, зафиксировать SHA, ID deployment и timestamp без
    секретов. Сделать публичные GET health/landing, затем согласованный
