@@ -7,6 +7,13 @@ import { ALL_BLOCKS, BLOCKS, ROLES, type Block, type Role } from '../../../serve
 
 const KIND_RU: Record<string, string> = { fuchs: 'FUCHS', distributor: 'Дистрибьютор', customer: 'Клиент' };
 
+// уровень организации показывается цветной полосой, права определяются ролью сотрудника, а не уровнем
+const LEVEL: Record<string, { tint: string; badge: string; dot: string; hint: string; indent: string }> = {
+  fuchs: { tint: 'bg-violet-500/10', badge: 'bg-violet-500/15 text-violet-800 dark:text-violet-300', dot: 'bg-violet-500', hint: 'верхний уровень', indent: '' },
+  distributor: { tint: 'bg-sky-500/10', badge: 'bg-sky-500/15 text-sky-800 dark:text-sky-300', dot: 'bg-sky-500', hint: 'управляет своими клиентами', indent: 'ml-3' },
+  customer: { tint: 'bg-amber-500/10', badge: 'bg-amber-500/15 text-amber-900 dark:text-amber-300', dot: 'bg-amber-500', hint: 'своя организация и техника', indent: 'ml-6' },
+};
+
 function Visibility({ user, onClose, onSaved }: { user: any; onClose: () => void; onSaved: () => void }) {
   const defaults = new Set<Block>(ROLES[user.role as Role].blocks);
   const [state, setState] = useState<Record<string, boolean>>(() => Object.fromEntries(ALL_BLOCKS.map((b) => [b, user.blocks.includes(b)])));
@@ -216,7 +223,6 @@ export function Orgs({ me }: { me: Me }) {
       setErr(e);
     }
   };
-  const depth = (o: any) => (o.kind === 'fuchs' ? 0 : o.kind === 'distributor' ? 1 : 2);
   // tree order: FUCHS, then each distributor followed by its customers
   const ordered = [
     ...list.filter((o) => o.kind === 'fuchs'),
@@ -257,56 +263,76 @@ export function Orgs({ me }: { me: Me }) {
         </form>
       )}
       <ErrorLine e={err} />
+      <div className="card flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs text-muted-foreground">
+        <span className="font-medium text-foreground">Уровни:</span>
+        {(['fuchs', 'distributor', 'customer'] as const).map((k) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <span className={`h-2.5 w-2.5 rounded-sm ${LEVEL[k].dot}`} />
+            <span>
+              {KIND_RU[k]} — {LEVEL[k].hint}
+            </span>
+          </span>
+        ))}
+        <span className="w-full">Слева — старший уровень; каждая ступень вправо — более узкая область управления. Действия сотрудника определяет его роль.</span>
+      </div>
       <div className="space-y-3">
-        {ordered.map((o) => (
-          <div key={o.id} className="card p-5" style={{ marginLeft: `${depth(o) * 1.25}rem` }}>
-            <div className="flex cursor-pointer flex-wrap items-center justify-between gap-2" onClick={() => setOpen(open === o.id ? null : o.id)}>
-              <div>
-                <span className="badge mr-2 bg-primary/10 text-primary">{KIND_RU[o.kind]}</span>
-                <b>{o.name}</b>
-                <span className="ml-2 text-sm text-muted-foreground">
-                  {o.machines} машин · {o.users} пользователей
-                </span>
-              </div>
-              <div className="flex items-center gap-2">
-                {can(me, 'orgs.manage') && o.id !== me.org_id && o.kind !== 'fuchs' && !(me.is_demo && o.protected) && (
-                  <button
-                    className="btn-ghost h-8 px-2 text-xs text-danger"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      remove(o);
-                    }}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" /> Удалить
-                  </button>
+        {ordered.map((o) => {
+          const lv = LEVEL[o.kind] ?? LEVEL.customer;
+          return (
+            <div key={o.id} data-org-level={o.kind} className={`card flex overflow-hidden ${lv.indent}`}>
+              {o.kind !== 'fuchs' && <span className="w-1 shrink-0 bg-violet-500/40" aria-hidden />}
+              {o.kind === 'customer' && <span className="w-1 shrink-0 bg-sky-500/50" aria-hidden />}
+              <span className={`w-1.5 shrink-0 ${lv.dot}`} aria-hidden />
+              <div className={`min-w-0 flex-1 p-4 sm:p-5 ${lv.tint}`}>
+                <div className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2" onClick={() => setOpen(open === o.id ? null : o.id)}>
+                  <div className="min-w-0">
+                    <span className={`badge mr-2 ${lv.badge}`}>{KIND_RU[o.kind]}</span>
+                    <b>{o.name}</b>
+                    <span className="ml-2 text-sm text-muted-foreground">
+                      {o.machines} машин · {o.users} пользователей
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {can(me, 'orgs.manage') && o.id !== me.org_id && o.kind !== 'fuchs' && !(me.is_demo && o.protected) && (
+                      <button
+                        className="btn-ghost h-8 px-2 text-xs text-danger"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          remove(o);
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Удалить
+                      </button>
+                    )}
+                    <span className="text-muted-foreground">{open === o.id ? '▲' : '▼'}</span>
+                  </div>
+                </div>
+                {open === o.id && (
+                  <div className="mt-4 space-y-4">
+                    {o.kind === 'customer' && me.org_id === o.id && me.owner_admin && (
+                      <label className="flex items-start gap-3 rounded-xl bg-warning/10 p-3 text-sm">
+                        <input
+                          type="checkbox"
+                          className="mt-1"
+                          checked={o.share_location_up}
+                          onChange={async (e) => {
+                            await api('PATCH', `/api/orgs/${o.id}`, { share_location_up: e.target.checked });
+                            orgs.reload();
+                          }}
+                        />
+                        <span>
+                          <b>Показывать местоположение машин дистрибьютору и FUCHS.</b> Моточасы и пробег видны им всегда; координаты — только если отмечено.
+                          Отключить сбор координат отдельной машины можно на её странице.
+                        </span>
+                      </label>
+                    )}
+                    {canUsers ? <Users org={o} me={me} /> : <p className="text-sm text-muted-foreground">Состав сотрудников видят администраторы.</p>}
+                  </div>
                 )}
-                <span className="text-muted-foreground">{open === o.id ? '▲' : '▼'}</span>
               </div>
             </div>
-            {open === o.id && (
-              <div className="mt-4 space-y-4">
-                {o.kind === 'customer' && me.org_id === o.id && me.owner_admin && (
-                  <label className="flex items-start gap-3 rounded-xl bg-warning/10 p-3 text-sm">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={o.share_location_up}
-                      onChange={async (e) => {
-                        await api('PATCH', `/api/orgs/${o.id}`, { share_location_up: e.target.checked });
-                        orgs.reload();
-                      }}
-                    />
-                    <span>
-                      <b>Показывать местоположение машин дистрибьютору и FUCHS.</b> Моточасы и пробег видны им всегда; координаты — только если отмечено.
-                      Отключить сбор координат отдельной машины можно на её странице.
-                    </span>
-                  </label>
-                )}
-                {canUsers ? <Users org={o} me={me} /> : <p className="text-sm text-muted-foreground">Состав сотрудников видят администраторы.</p>}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

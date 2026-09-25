@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Combine, Construction, Cog, Forklift, Tractor, Truck, Wheat } from 'lucide-react';
 import { can, sees, type Me } from '../perm';
 import { go } from '../main';
 import { api, CATEGORY_RU, fmt, METHOD_RU } from '../api';
@@ -90,6 +91,8 @@ export function AddMachine({ me, onClose, onDone }: { me: Me; onClose: () => voi
 export function Fleet({ me }: { me: Me }) {
   const [tick, setTick] = useState(0);
   const [q, setQ] = useState('');
+  const [category, setCategory] = useState('all');
+  const [sort, setSort] = useState<{ key: 'name' | 'client' | 'hours' | 'odometer'; direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
   const [adding, setAdding] = useState(false);
   const [at, setAt] = useState<number | null>(null);
   const res = useAsync(() => api('GET', '/api/machines'), [tick]);
@@ -103,7 +106,33 @@ export function Fleet({ me }: { me: Me }) {
     return () => clearInterval(t);
   }, [me.role]);
   const machines: any[] = res.data?.machines ?? [];
-  const shown = machines.filter((m) => !q || `${m.name} ${m.org_name} ${m.make ?? ''} ${m.model ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const matches = machines.filter((m) => (category === 'all' || m.category === category) && (!q || `${m.name} ${m.org_name} ${m.make ?? ''} ${m.model ?? ''}`.toLowerCase().includes(q.toLowerCase())));
+  const shown = [...matches].sort((a, b) => {
+    const value = (m: any) => sort.key === 'name' ? m.name : sort.key === 'client' ? m.org_name : sort.key === 'hours' ? m.engine_hours?.value : m.odometer?.value;
+    const av = value(a);
+    const bv = value(b);
+    if (av == null || bv == null) return av == null ? (bv == null ? 0 : 1) : -1;
+    const compared = typeof av === 'string' ? av.localeCompare(bv, 'ru') : av - bv;
+    return sort.direction === 'asc' ? compared : -compared;
+  });
+  const categoryIcon: Record<string, typeof Tractor> = {
+    harvester: Wheat, forwarder: Truck, skidder: Tractor, timber_truck: Truck, tractor: Tractor,
+    combine: Combine, forage_harvester: Combine, sprayer: Tractor, excavator: Construction,
+    loader: Forklift, dozer: Construction, grader: Construction, roller: Construction, crane: Construction,
+    telehandler: Forklift, dump_truck: Truck, truck: Truck, drill: Construction, other: Cog,
+  };
+  const counts = machines.reduce<Record<string, number>>((acc, m) => {
+    acc[m.category] = (acc[m.category] ?? 0) + 1;
+    return acc;
+  }, {});
+  const sortBy = (key: typeof sort.key) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
+  const sortHeader = (key: typeof sort.key, title: string) => (
+    <th className="px-4 py-3" aria-sort={sort.key === key ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className="inline-flex items-center gap-1 text-left hover:text-foreground" onClick={() => sortBy(key)}>
+        {title}<span aria-hidden="true">{sort.key === key ? (sort.direction === 'asc' ? '↑' : '↓') : '↕'}</span>
+      </button>
+    </th>
+  );
   const markers: GisMarker[] = useMemo(() => {
     if (at && past.data) {
       const ids = new Set(shown.map((m) => m.id));
@@ -120,7 +149,7 @@ export function Fleet({ me }: { me: Me }) {
         label: m.engine_hours ? `${m.name} · ${fmt(m.engine_hours.value)} ч` : m.name,
         color: m.freshness === 'online' ? '#22c55e' : m.freshness === 'recent' ? '#f59e0b' : '#ef4444',
       }));
-  }, [res.data, q, at, past.data]);
+  }, [res.data, q, at, past.data, category]);
   const online = machines.filter((m) => m.freshness === 'online').length;
   const canHistory = sees(me, 'map') && sees(me, 'history');
   const dayAgo = Date.now() - 24 * 3600e3;
@@ -143,6 +172,19 @@ export function Fleet({ me }: { me: Me }) {
         </div>
       </div>
       <ErrorLine e={res.error} />
+      <div className="flex gap-2 overflow-x-auto pb-1" role="group" aria-label="Фильтр по типу техники">
+        <button type="button" onClick={() => setCategory('all')} aria-pressed={category === 'all'} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs ${category === 'all' ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-accent'}`}>
+          <Cog size={18} aria-hidden="true" /> Все <span className="badge">{machines.length}</span>
+        </button>
+        {Object.entries(CATEGORY_RU).map(([key, label]) => {
+          const Icon = categoryIcon[key] ?? Cog;
+          return (
+            <button key={key} type="button" onClick={() => setCategory(key)} aria-label={`${label}: ${counts[key] ?? 0}`} aria-pressed={category === key} className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs ${category === key ? 'border-primary bg-primary/10 text-foreground' : 'border-border text-muted-foreground hover:bg-accent'}`}>
+              <Icon size={18} aria-hidden="true" /> {label} <span className="badge">{counts[key] ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
       {sees(me, 'map') && (markers.length > 0 || at) && (
         <div className="space-y-2">
           <GisMap markers={markers} geofences={gf.data?.geofences ?? []} height={420} onPick={(id) => go('#/machine/' + id)} fitKey={at ? 'fleet-at' : 'fleet-live'} />
@@ -166,10 +208,10 @@ export function Fleet({ me }: { me: Me }) {
         <table className="w-full min-w-[760px] text-left text-sm">
           <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-4 py-3">Машина</th>
-              {me.org_kind !== 'customer' && <th className="px-4 py-3">Клиент</th>}
-              {sees(me, 'hours') && <th className="px-4 py-3">Моточасы</th>}
-              {sees(me, 'mileage') && <th className="px-4 py-3">Пробег</th>}
+              {sortHeader('name', 'Машина')}
+              {me.org_kind !== 'customer' && sortHeader('client', 'Клиент')}
+              {sees(me, 'hours') && sortHeader('hours', 'Моточасы')}
+              {sees(me, 'mileage') && sortHeader('odometer', 'Пробег')}
               {(sees(me, 'fuel') || sees(me, 'oil')) && <th className="px-4 py-3">{sees(me, 'fuel') ? 'Топливо / масло' : 'Масло'}</th>}
               {sees(me, 'map') && <th className="px-4 py-3">Местоположение</th>}
               <th className="px-4 py-3">Данные</th>
@@ -225,7 +267,7 @@ export function Fleet({ me }: { me: Me }) {
             ))}
             {!res.loading && shown.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={1 + (me.org_kind !== 'customer' ? 1 : 0) + (sees(me, 'hours') ? 1 : 0) + (sees(me, 'mileage') ? 1 : 0) + (sees(me, 'fuel') || sees(me, 'oil') ? 1 : 0) + (sees(me, 'map') ? 1 : 0) + 1} className="px-4 py-10 text-center text-muted-foreground">
                   Машин пока нет. {can(me, 'machines.create') ? 'Добавьте первую кнопкой «+ Машина» или подключите платформу в разделе «Подключения».' : ''}
                 </td>
               </tr>

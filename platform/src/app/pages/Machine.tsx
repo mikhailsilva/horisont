@@ -221,6 +221,11 @@ function SourcesBlock({ id, sources, canManage, onChange }: { id: string; source
               копировать
             </button>
           </div>
+          {/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && (
+            <a className="btn-primary sticky bottom-0 mt-4 flex w-full justify-center" href={'#/cab?code=' + pair.code}>
+              Подключить это устройство
+            </a>
+          )}
         </Modal>
       )}
       {osmand && (
@@ -322,10 +327,19 @@ function ServiceBlock({ id, items, canManage, onChange }: { id: string; items: a
 
 export function MachinePage({ id, me }: { id: string; me: Me }) {
   const [tick, setTick] = useState(0);
+  const [photoState, setPhotoState] = useState<{ machineId: string; value: string | null } | null>(null);
+  const photo = photoState?.machineId === id ? photoState.value : null;
+  const [photoError, setPhotoError] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
   const det = useAsync(() => api('GET', `/api/machines/${id}`), [id, tick]);
   const daily = useAsync(() => (sees(me, 'reports') ? api('GET', `/api/machines/${id}/daily?days=30`) : Promise.resolve({ days: [] })), [id, tick]);
   const gf = useAsync(() => (sees(me, 'map') ? api('GET', '/api/geofences') : Promise.resolve({ geofences: [] })), [id]);
   const m = det.data?.machine;
+  useEffect(() => {
+    let active = true;
+    api<{ photo: string | null }>('GET', `/api/machines/${id}/photo`).then((r) => active && setPhotoState({ machineId: id, value: r.photo })).catch(() => active && setPhotoState({ machineId: id, value: null }));
+    return () => { active = false; };
+  }, [id]);
   useEffect(() => {
     const t = setInterval(() => setTick((x) => x + 1), 30_000);
     return () => clearInterval(t);
@@ -365,6 +379,41 @@ export function MachinePage({ id, me }: { id: string; me: Me }) {
           )}
         </div>
       </div>
+
+      <section className="card overflow-hidden p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Фотография машины</h2>
+          {can(me, 'machines.edit') && (
+            <div className="flex items-center gap-2">
+              {photo && <button className="btn-ghost px-2 py-1 text-xs" disabled={photoBusy} onClick={async () => {
+                setPhotoBusy(true);
+                try { await api('DELETE', `/api/machines/${id}/photo`); setPhotoState({ machineId: id, value: null }); setPhotoError(''); }
+                catch (e: any) { setPhotoError(e.message); }
+                finally { setPhotoBusy(false); }
+              }}>Удалить</button>}
+              <label className="btn-ghost cursor-pointer px-2 py-1 text-xs">
+                {photoBusy ? 'Сохранение…' : photo ? 'Заменить фото' : 'Добавить фото'}
+                <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" disabled={photoBusy} onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!file) return;
+                  setPhotoBusy(true);
+                  try {
+                    const data_url = await fileToJpeg(file);
+                    const saved = await api<{ photo: string }>('PATCH', `/api/machines/${id}/photo`, { data_url });
+                    setPhotoState({ machineId: id, value: saved.photo });
+                    setPhotoError('');
+                  } catch (err: any) { setPhotoError(err.message ?? 'Не удалось сохранить фото'); }
+                  finally { setPhotoBusy(false); }
+                }} />
+              </label>
+            </div>
+          )}
+        </div>
+        {photo ? <img src={photo} alt={`Фотография: ${m.name}`} className="max-h-[28rem] w-full rounded-xl object-contain" />
+          : <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">Фотография пока не добавлена</div>}
+        {photoError && <p className="mt-2 text-xs text-danger">{photoError}</p>}
+      </section>
 
       <div className="grid gap-4 md:grid-cols-3">
         <div className="card p-5">

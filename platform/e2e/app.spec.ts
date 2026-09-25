@@ -79,5 +79,85 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await expect(page.getByText('Харвестер №7')).toBeVisible();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: `${SHOTS}/fleet.png`, fullPage: true });
+
+  const harvester = page.getByRole('button', { name: 'Харвестер: 1' });
+  await expect(harvester).toBeVisible();
+  await harvester.click();
+  await expect(harvester).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('row').filter({ hasText: 'Харвестер №7' })).toHaveCount(1);
+  const machineSort = page.getByRole('columnheader', { name: /Машина/ });
+  await expect(machineSort).toHaveAttribute('aria-sort', 'ascending');
+  await machineSort.getByRole('button').click();
+  await expect(machineSort).toHaveAttribute('aria-sort', 'descending');
+
+  const layers = page.getByRole('button', { name: /^(Схема|Спутник|Гибрид|Топокарта)$/ });
+  const hasLayerToolbar = await layers.isVisible({ timeout: 5_000 }).catch(() => false);
+  if (hasLayerToolbar) {
+    await layers.click();
+    const hybrid = page.getByLabel('Гибрид');
+    const preferenceSaved = page.waitForResponse((response) => response.url().includes('/api/me/preferences') && response.request().method() === 'PATCH');
+    await hybrid.check();
+    await preferenceSaved;
+  } else {
+    await page.evaluate(async () => fetch('/api/me/preferences', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${localStorage.getItem('itles_token')}` },
+      body: JSON.stringify({ mapBase: 'hybrid' }),
+    }));
+  }
+  await page.reload();
+  if (hasLayerToolbar) {
+    await expect(page.getByRole('button', { name: 'Гибрид' })).toBeVisible();
+    await page.getByRole('button', { name: 'Гибрид' }).click();
+    await expect(page.getByLabel('Гибрид')).toBeChecked();
+  } else {
+    await expect.poll(() => page.evaluate(async () => {
+      const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
+      return (await response.json()).preferences.mapBase;
+    })).toBe('hybrid');
+  }
+
+  const auth = await page.evaluate(() => ({ token: localStorage.getItem('itles_token'), api: localStorage.getItem('itles_api') }));
+  const accountContext = await browser.newContext();
+  await accountContext.addInitScript((state) => {
+    if (state.token) localStorage.setItem('itles_token', state.token);
+    if (state.api) localStorage.setItem('itles_api', state.api);
+  }, auth);
+  const otherAccountPage = await accountContext.newPage();
+  await otherAccountPage.goto('/app/#/');
+  await expect(otherAccountPage.getByRole('heading', { name: 'Парк техники' })).toBeVisible();
+  await expect.poll(() => otherAccountPage.evaluate(async () => {
+    const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
+    return (await response.json()).preferences.mapBase;
+  })).toBe('hybrid');
+  await accountContext.close();
+
+  const machineId = await page.evaluate(async () => {
+    const token = localStorage.getItem('itles_token');
+    const response = await fetch('/api/machines', { headers: { authorization: `Bearer ${token}` } });
+    return (await response.json()).machines[0].id as string;
+  });
+  const mobileAccount = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/126.0.0.0 Mobile Safari/537.36',
+  });
+  await mobileAccount.addInitScript((state) => {
+    if (state.token) localStorage.setItem('itles_token', state.token);
+    if (state.api) localStorage.setItem('itles_api', state.api);
+  }, auth);
+  const mobileAccountPage = await mobileAccount.newPage();
+  await mobileAccountPage.goto(`/app/#/machine/${machineId}`);
+  await mobileAccountPage.getByRole('button', { name: '+ Телефон (ссылка)' }).click();
+  await expect(mobileAccountPage.getByRole('link', { name: 'Подключить это устройство' })).toBeVisible();
+  await mobileAccount.close();
+
+  await cab.goto('/app/#/cab?code=123456');
+  await expect(cab.getByText(/уже подключён к машине/)).toBeVisible();
+  const replace = cab.getByRole('button', { name: 'Подключить и заменить привязку' });
+  await expect(replace).toBeDisabled();
+  await cab.getByLabel(/текущая привязка этого браузера будет заменена/).check();
+  await expect(replace).toBeEnabled();
   await phone.close();
 });

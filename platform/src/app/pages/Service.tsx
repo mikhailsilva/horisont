@@ -1,11 +1,18 @@
+import { useMemo, useState } from 'react';
 import type { Me } from '../main';
 import { go } from '../main';
 import { api, fmt } from '../api';
 import { ErrorLine, useAsync } from '../ui';
 
 export function Service({ me }: { me: Me }) {
+  const [sort, setSort] = useState<'priority' | 'hours' | 'date'>('priority');
   const res = useAsync(() => api('GET', '/api/service/overview'), []);
   const items: any[] = res.data?.items ?? [];
+  const sortedItems = useMemo(() => [...items].sort((a, b) => {
+    if (sort === 'date') return dateValue(a.due_date) - dateValue(b.due_date) || statusRank(a.status) - statusRank(b.status);
+    if (sort === 'hours') return numberValue(a.remaining_h) - numberValue(b.remaining_h) || statusRank(a.status) - statusRank(b.status);
+    return statusRank(a.status) - statusRank(b.status) || numberValue(a.remaining_h) - numberValue(b.remaining_h) || dateValue(a.due_date) - dateValue(b.due_date);
+  }), [items, sort]);
   const soon = items.filter((i) => i.status === 'overdue' || i.status === 'soon');
   const litres = soon.reduce((s, i) => s + (i.volume_l ?? 0), 0);
   return (
@@ -19,6 +26,16 @@ export function Service({ me }: { me: Me }) {
       </div>
       <ErrorLine e={res.error} />
       <div className="card overflow-x-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+          <span className="text-sm font-medium">Сначала требующие внимания</span>
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">Сортировать
+            <select className="input min-w-44" value={sort} onChange={(e) => setSort(e.target.value as 'priority' | 'hours' | 'date')}>
+              <option value="priority">По срочности</option>
+              <option value="hours">По остатку моточасов</option>
+              <option value="date">По предполагаемой дате</option>
+            </select>
+          </label>
+        </div>
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
@@ -30,7 +47,7 @@ export function Service({ me }: { me: Me }) {
             </tr>
           </thead>
           <tbody>
-            {items.map((i) => (
+            {sortedItems.map((i) => (
               <tr key={i.id} className="cursor-pointer border-b border-border hover:bg-accent" onClick={() => go('#/machine/' + i.machine_id)}>
                 <td className="px-4 py-3">
                   <b>{i.machine}</b>
@@ -65,4 +82,18 @@ export function Service({ me }: { me: Me }) {
       </div>
     </div>
   );
+}
+
+function statusRank(status: string) {
+  return status === 'overdue' ? 0 : status === 'soon' ? 1 : status === 'unknown' ? 2 : 3;
+}
+
+function numberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : Number.POSITIVE_INFINITY;
+}
+
+function dateValue(value: unknown) {
+  if (typeof value !== 'string') return Number.POSITIVE_INFINITY;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }

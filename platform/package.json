@@ -1,6 +1,7 @@
 {
   "name": "itles-platform",
   "private": true,
+  "packageManager": "pnpm@10.26.0",
   "version": "0.2.0",
   "type": "module",
   "description": "ITles: мониторинг моточасов, пробега и местоположения спецтехники (FUCHS, дистрибьюторы, клиенты)",

@@ -96,8 +96,8 @@ export function Connect({ me }: { me: Me }) {
       </div>
       <div className="card divide-y divide-border">
         {(list.data?.connectors ?? []).map((c: any) => (
-          <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 p-4 text-sm">
-            <div>
+          <div key={c.id} className="grid gap-2 p-4 text-sm sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <div className="min-w-0">
               <b>{c.label}</b> <span className="text-muted-foreground">· {c.org_name} · {c.units} машин</span>
               <div className="text-xs text-muted-foreground">
                 {c.status === 'error' ? <span className="text-danger">{c.last_error}</span> : `синхронизация ${ago(c.last_sync_at)}`}
@@ -105,7 +105,7 @@ export function Connect({ me }: { me: Me }) {
             </div>
             {can(me, 'connectors.manage') && (
               <button
-                className="btn-ghost px-3 py-1.5 text-xs"
+                className="btn-ghost justify-self-start px-3 py-1.5 text-xs sm:justify-self-end"
                 onClick={async () => {
                   await api('POST', `/api/connectors/${c.id}/sync`).catch((e) => alert(e.message));
                   list.reload();

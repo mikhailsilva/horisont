@@ -35,13 +35,15 @@ interface Diag {
 const isIos = /iP(hone|ad|od)/.test(navigator.userAgent);
 const isAndroid = /Android/.test(navigator.userAgent);
 
-function Pair({ onDone }: { onDone: () => void }) {
+function Pair({ onDone, alreadyPaired = false }: { onDone: () => void; alreadyPaired?: boolean }) {
   const initial = /code=(\d{6})/.exec(location.hash)?.[1] ?? '';
   const [code, setCode] = useState(initial);
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    if (busy || code.length !== 6 || alreadyPaired && !confirmReplace) return;
     setBusy(true);
     try {
       const r = await api('POST', '/api/devices/enroll', { code }, null);
@@ -56,10 +58,14 @@ function Pair({ onDone }: { onDone: () => void }) {
     }
   };
   return (
-    <div className="dark flex min-h-full items-center justify-center bg-background p-4 text-foreground">
+    <div className="flex min-h-full items-center justify-center bg-background p-4 text-foreground">
       <form onSubmit={submit} className="card w-full max-w-sm space-y-4 p-7 text-center">
         <h1 className="text-xl font-bold">Телефон в кабине</h1>
-        <p className="text-sm text-muted-foreground">Введите 6 цифр со страницы машины в кабинете ITles («Источники данных» → «+ Телефон (ссылка)»).</p>
+        <p className="text-sm text-muted-foreground">
+          {alreadyPaired
+            ? 'Этот браузер уже подключён к машине. Подтвердите замену привязки, только если хотите подключить его к другой машине.'
+            : 'Введите 6 цифр со страницы машины в кабинете ITles («Источники данных» → «+ Телефон (ссылка)»).'}
+        </p>
         <input
           className="input text-center font-mono text-3xl tracking-[0.4em]"
           inputMode="numeric"
@@ -68,9 +74,15 @@ function Pair({ onDone }: { onDone: () => void }) {
           onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
           autoFocus
         />
+        {alreadyPaired && (
+          <label className="flex items-start gap-2 text-left text-xs text-warning">
+            <input type="checkbox" checked={confirmReplace} onChange={(e) => setConfirmReplace(e.target.checked)} />
+            <span>Я понимаю: текущая привязка этого браузера будет заменена.</span>
+          </label>
+        )}
         <ErrorLine e={err} />
-        <button className="btn-primary w-full" disabled={code.length !== 6 || busy}>
-          {busy ? 'Подключаем…' : 'Подключить'}
+        <button className="btn-primary w-full" disabled={code.length !== 6 || busy || alreadyPaired && !confirmReplace}>
+          {busy ? 'Подключаем…' : alreadyPaired ? 'Подключить и заменить привязку' : 'Подключить это устройство'}
         </button>
         <a href="#/" className="block text-xs text-muted-foreground">
           ← Кабинет
@@ -309,7 +321,8 @@ export function Cab() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, active]);
 
-  if (!token || !cfg) return <Pair onDone={() => { setToken(localStorage.getItem(DEV_KEY)); setCfg(JSON.parse(localStorage.getItem(CFG_KEY) ?? 'null')); }} />;
+  const hasIncomingCode = /code=(\d{6})/.test(location.hash);
+  if (hasIncomingCode || !token || !cfg) return <Pair alreadyPaired={!!token && !!cfg} onDone={() => { setToken(localStorage.getItem(DEV_KEY)); setCfg(JSON.parse(localStorage.getItem(CFG_KEY) ?? 'null')); }} />;
 
   const start = () => {
     // inside the tap: iOS shows the location prompt and allows the motion prompt only from a user gesture

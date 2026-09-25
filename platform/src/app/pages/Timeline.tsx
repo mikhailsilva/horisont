@@ -186,10 +186,18 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
     if (pos[j]) setT(pos[j][0]);
   };
   const marks = [
-    ...(d?.stops ?? []).map((x: any) => ({ t: x.from, w: x.to - x.from, c: 'bg-primary/60', title: `стоянка ${Math.round((x.to - x.from) / 60e3)} мин` })),
+    ...(d?.stops ?? []).map((x: any) => ({ t: x.from, w: x.to - x.from, c: 'bg-warning/60', title: `Стоянка по ГНСС · ${Math.round((x.to - x.from) / 60e3)} мин` })),
     ...(d?.fuel?.events ?? []).map((e: any) => ({ t: e.t_start, w: Math.max(e.t_end - e.t_start, (to - from) / 300), c: e.kind === 'refill' ? 'bg-success' : 'bg-danger', title: `${e.kind === 'refill' ? 'заправка' : 'слив'} ${fmt(e.litres, 0)} л` })),
     ...(d?.faults ?? []).map((f: any) => ({ t: f.first_t, w: Math.max(f.last_t - f.first_t, (to - from) / 300), c: 'bg-warning', title: f.text })),
   ];
+  const rpmPoints: Pt[] = s.rpm ?? [];
+  const activityMarks = rpmPoints.flatMap(([sampleT, value], i) => {
+    const end = Math.min(to, sampleT + STALE, rpmPoints[i + 1]?.[0] ?? sampleT + STALE);
+    const start = Math.max(from, sampleT);
+    if (end <= start) return [];
+    const running = value > 300;
+    return [{ t: start, w: end - start, c: running ? 'bg-success' : 'bg-warning', title: `Двигатель ${running ? 'работает' : 'заглушен'} · данные CAN` }];
+  });
   const gpx = `${apiBase()}/api/machines/${id}/track.gpx?from=${new Date(from).toISOString()}&to=${new Date(to).toISOString()}`;
 
   return (
@@ -219,9 +227,23 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
         />
       )}
       <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" aria-label="Обозначения активности">
+          <span className="inline-flex items-center gap-1.5" title="По оборотам двигателя из CAN; без данных сегмент не отображается">
+            <span className="h-2 w-4 rounded-sm bg-success" aria-hidden="true" /> Двигатель работает (CAN)
+          </span>
+          <span className="inline-flex items-center gap-1.5" title="По оборотам двигателя из CAN; без данных сегмент не отображается">
+            <span className="h-2 w-4 rounded-sm bg-warning" aria-hidden="true" /> Двигатель заглушен (CAN)
+          </span>
+          <span className="inline-flex items-center gap-1.5" title="Неподвижность ГНСС не менее 5 минут">
+            <span className="h-2 w-4 rounded-sm bg-warning/60" aria-hidden="true" /> Стоянка по ГНСС
+          </span>
+        </div>
         <div className="relative h-2">
+          {activityMarks.map((mk, i) => (
+            <div key={`activity-${i}`} title={mk.title} aria-label={mk.title} className={`absolute top-0 h-2 rounded-sm ${mk.c}`} style={{ left: `${((mk.t - from) / (to - from)) * 100}%`, width: `${Math.max(0.15, (mk.w / (to - from)) * 100)}%` }} />
+          ))}
           {marks.map((mk, i) => (
-            <div key={i} title={mk.title} className={`absolute top-0 h-2 rounded-sm ${mk.c}`} style={{ left: `${((mk.t - from) / (to - from)) * 100}%`, width: `${Math.max(0.4, (mk.w / (to - from)) * 100)}%` }} />
+            <div key={i} title={mk.title} aria-label={mk.title} className={`absolute top-0 h-2 rounded-sm ${mk.c}`} style={{ left: `${((mk.t - from) / (to - from)) * 100}%`, width: `${Math.max(0.4, (mk.w / (to - from)) * 100)}%` }} />
           ))}
         </div>
         <input type="range" className="w-full accent-[#e11d48]" min={from} max={to} step={1000} value={Math.min(to, Math.max(from, t))} onChange={(e) => { setPlaying(false); setT(Number(e.target.value)); }} aria-label="Ползунок времени" />
