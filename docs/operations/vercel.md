@@ -8,7 +8,11 @@ Vercel (`list_projects`, `get_project`, `list_deployments`, `get_deployment`,
 не сохранялись. Номера MCP-серверов пересматривать по [skill](../../.agents/skills/mcp-servers/SKILL.md).
 
 > **Перенос 25.09.2026.** Рабочий репозиторий — [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont):
-> исходники и история, включая PR #5, импортированы из `raulwulff6769/framework-lab`.
+> дерево исходников с изменениями PR #5 импортировано из `raulwulff6769/framework-lab`
+> через squash-слияние [PR #1](https://github.com/mikhailsilva/horisont/pull/1). Исходные
+> Git-предки не входят в ветку по умолчанию; полная история доступна по
+> [архивному тегу `archive/framework-lab-pr5-2026.09.25`](https://github.com/mikhailsilva/horisont/tree/archive/framework-lab-pr5-2026.09.25)
+> в том же репозитории (дерево совпадает с импортом).
 > Действующий production это не затронуло: по последней проверке 24.09
 > `itles.vercel.app` обслуживает выпуск, собранный из framework-lab по закреплённому SHA.
 > Исторические APK и Windows ZIP перенесены отдельными prerelease без пересборки;
@@ -39,8 +43,9 @@ Vercel (`list_projects`, `get_project`, `list_deployments`, `get_deployment`,
 ## 24.09.2026: выпуск из framework-lab
 
 Историческая запись: источником тогда был `raulwulff6769/framework-lab`; с 25.09
-этот код с последующей историей (включая PR #5) живёт в `mikhailsilva/horisont`,
-а production остаётся на закреплённом SHA этого выпуска. Выполнено с явного
+этот код (включая PR #5) есть в основной ветке `mikhailsilva/horisont`, а исходная
+история доступна по архивному тегу выше, не как предки основной ветки. Production
+остаётся на закреплённом SHA выпуска 24.09. Выполнено с явного
 согласия владельца; значения секретов не выводились.
 
 1. Резервная копия: `pg_dump` **18.6** (сервер Neon — PostgreSQL 18.6; клиент 16 отказывается) в формате custom и plain,

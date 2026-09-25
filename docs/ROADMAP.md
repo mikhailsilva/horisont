@@ -9,7 +9,11 @@
 
 **Перенос 25.09.2026:** актуальные исходники импортированы в рабочий репозиторий
 [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont) из
-`raulwulff6769/framework-lab` вместе с полной историей, включая PR #5; новые PR —
+`raulwulff6769/framework-lab` с изменениями PR #5. Ветка по умолчанию содержит
+дерево исходников после squash-слияния [PR #1](https://github.com/mikhailsilva/horisont/pull/1),
+но не исходных Git-предков PR #5: полная история сохранена по
+[архивному тегу `archive/framework-lab-pr5-2026.09.25`](https://github.com/mikhailsilva/horisont/tree/archive/framework-lab-pr5-2026.09.25)
+в этом же репозитории; дерево тега совпадает с импортом. Новые PR —
 в `mikhailsilva/horisont`, upstream и прежние `somemateria/biildfe4` /
 `clutteredcal/ITles` — исторические этапы, а не рабочий репозиторий. Бинарные
 prerelease 24.09 [`android-2026.09.24`](https://github.com/mikhailsilva/horisont/releases/tag/android-2026.09.24) и
@@ -73,11 +77,12 @@ MCP 23.09 ~22:24: Tavily `tavily_search` ответил, Cloudflare `workers_lis
 
 ### P0 — проверить публичные данные и восстановить релизный процесс
 
-1. **Аудировать уже опубликованный импорт.** PR #1 слит в публичную ветку
-   по умолчанию `somemateria/biildfe4`; 25.09 исходники и вся история (включая
-   PR #5) импортированы в рабочий [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont) —
-   аудит публикации относится к обоим публичным состояниям, а адрес старого
-   релиза `clutteredcal/ITles` остаётся отдельным от адреса новых исходников.
+1. **Аудировать уже опубликованный импорт.** PR #1 старого `somemateria/biildfe4`
+   слит в его публичную ветку по умолчанию; 25.09 дерево исходников с PR #5 перенесено
+   в рабочий [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont),
+   полная исходная история сохранена по архивному тегу выше —
+   аудит публикации относится к обоим публичным состояниям и архивному тегу,
+   а адрес старого релиза `clutteredcal/ITles` остаётся отдельным от адреса новых исходников.
    Проверить происхождение и право публикации
    скриншотов с машиной/координатами, Excel-книги, контактов в документации,
    адресов авторов и attribution trailers в истории. Часть значений могла
