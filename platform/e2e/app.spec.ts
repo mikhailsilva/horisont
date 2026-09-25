@@ -90,7 +90,7 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await machineSort.getByRole('button').click();
   await expect(machineSort).toHaveAttribute('aria-sort', 'descending');
 
-  const layers = page.getByRole('button', { name: /Слои карты/ });
+  const layers = page.getByRole('button', { name: /^(Схема|Спутник|Гибрид|Топокарта)$/ });
   const hasLayerToolbar = await layers.isVisible({ timeout: 5_000 }).catch(() => false);
   if (hasLayerToolbar) {
     await layers.click();
@@ -108,7 +108,7 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await page.reload();
   if (hasLayerToolbar) {
     await expect(page.getByRole('button', { name: 'Гибрид' })).toBeVisible();
-    await page.getByRole('button', { name: /Слои карты/ }).click();
+    await page.getByRole('button', { name: 'Гибрид' }).click();
     await expect(page.getByLabel('Гибрид')).toBeChecked();
   } else {
     await expect.poll(() => page.evaluate(async () => {
