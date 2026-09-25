@@ -10,6 +10,7 @@ description: Карта 6 MCP-серверов проекта (Cloudflare, Verce
 ## Механика вызовов
 
 - Discovery: `mcp_server_N_list_tools(query, limit)`; вызов: `mcp_server_N_call(name, arguments)`.
+- В `arguments` передаются параметры инструмента напрямую, без лишнего вложенного `input`.
 - У server 3 имя инструмента включает неймспейс: `server_36#BLAST_nucleotide_search`.
 - Поиск fuzzy (по токенам): точное совпадение может стоять ПОД нерелевантным мусором
   (пример: probe `server_4#` вернул `server_4#...` только третьим). Правила:
@@ -114,6 +115,8 @@ AI-генерация (get_generation/get_generation_job/get_take), публик
    явной команде; `buy_*` — сначала quote.
 3. Чтение и поиск (`get_*`, `search_*`, `list_*`, `query_*`) — в рамках задачи и с
    соблюдением ограничений доступа/конфиденциальности.
+4. `get_project_env` может вернуть закрытые значения. Для инвентаризации используйте
+   `filter_project_envs` с `decrypt:false`; фиксируйте только имена и области применения.
 
 ## Шпаргалка «что когда»
 
