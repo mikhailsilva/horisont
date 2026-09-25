@@ -41,17 +41,44 @@ def gateway():
     ports = {p: _free_port() for p in PROTOS}
     loop = asyncio.new_event_loop()
     ready = threading.Event()
+    stopped = threading.Event()
 
     def run() -> None:
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(gw.serve(ports, host="127.0.0.1"))
-        ready.set()
-        loop.run_forever()
+        servers = []
+        try:
+            servers.extend(loop.run_until_complete(gw.serve(ports, host="127.0.0.1")))
+            ready.set()
+            loop.run_forever()
+
+            async def drain() -> None:
+                tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()]
+                for t in tasks:
+                    t.cancel()
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Stop accepting first: with listeners closed no new handler task can
+            # appear after the drain snapshot. Then cancel leftover connection
+            # handlers while the loop is live so their finally blocks
+            # (writer.close/wait_closed) finish here, not at GC time.
+            for srv in servers:
+                srv.close()
+            loop.run_until_complete(drain())
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        finally:
+            asyncio.set_event_loop(None)
+            loop.close()
+            stopped.set()
 
     threading.Thread(target=run, daemon=True).start()
     assert ready.wait(10)
     yield q, ports
-    loop.call_soon_threadsafe(loop.stop)
+    try:
+        loop.call_soon_threadsafe(loop.stop)
+    except RuntimeError:
+        return  # the worker already exited and closed the loop
+    assert stopped.wait(10)
 
 
 def _stand(tmp_path, ports, post) -> Stand:

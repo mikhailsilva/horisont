@@ -37,6 +37,7 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await expect(page.getByRole('heading', { name: 'Харвестер №7' })).toBeVisible();
 
   await page.getByRole('button', { name: '+ Телефон (ссылка)' }).click();
+  await expect(page.getByText(/Код действует 2 часа/)).toBeVisible();
   const codeEl = page.locator('.font-mono.text-5xl');
   await expect(codeEl).toHaveText(/^\d{6}$/);
   const code = (await codeEl.textContent())!.trim();

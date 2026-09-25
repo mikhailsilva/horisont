@@ -2,11 +2,11 @@ import { createRoot } from 'react-dom/client';
 import '../styles.css';
 import { ThemeToggle } from '../app/main-toggle';
 
-const WINDOWS_ZIP = 'https://github.com/raulwulff6769/framework-lab/releases/download/desktop-2026.09.24/ITles-Windows-x64-0.3.0.zip';
-const ANDROID_APK = 'https://github.com/raulwulff6769/framework-lab/releases/download/android-2026.09.24/itles-android.apk';
+const WINDOWS_ZIP = 'https://github.com/mikhailsilva/horisont/releases/download/desktop-2026.09.24/ITles-Windows-x64-0.3.0.zip';
+const ANDROID_APK = 'https://github.com/mikhailsilva/horisont/releases/download/android-2026.09.24/itles-android.apk';
 const DOWNLOADS = [
-  { os: 'Android', file: ANDROID_APK, note: 'Кабинет и «Телефон в кабине» с фоновой геолокацией (работает при выключенном экране). APK, Android 7+.' },
-  { os: 'Windows', file: WINDOWS_ZIP, note: 'ПК, Windows 10/11 x64: распакуйте ZIP и запустите ITles.exe. Вход — те же логины и пароли.' },
+  { os: 'Android', file: ANDROID_APK, note: 'APK, Android 7+: фоновая служба предусмотрена, но на реальном телефоне ещё не проверена.' },
+  { os: 'Windows', file: WINDOWS_ZIP, note: 'Windows 10/11 x64: распакуйте ZIP и запустите ITles.exe. На реальном Windows не проверялось.' },
   { os: 'iPhone / iPad', file: './app/', note: 'Кабинет: Safari → «Поделиться» → «На экран Домой». Для GPS в фоне — Traccar Client из App Store.' },
   { os: 'Веб-кабинет', file: './app/', note: 'Любой браузер, без установки.' },
 ];
@@ -19,7 +19,7 @@ const METRICS = [
 ];
 
 const PATHS = [
-  ['Трекер уже стоит', 'С 01.01.2025 у лесозаготовительной техники он обязателен (ст. 96.3 ЛК РФ). Подключаем платформу Wialon, Traccar или ISO 15143-3 в два клика либо добавляем наш сервер вторым адресом в трекере.', 'без затрат'],
+  ['Трекер уже стоит', 'С 01.01.2025 у лесозаготовительной техники он обязателен (ст. 96.3 ЛК РФ). При наличии доступа к платформе подключаем Wialon, Traccar или ISO 15143-3 либо добавляем наш сервер вторым адресом в трекере.', 'без затрат'],
   ['Датчики масла', 'Многие электронные двигатели уже передают уровень, давление и температуру масла по CAN J1939 — трекер с CAN читает их без новых датчиков. Состояние масла и воду в нём добавляют датчики с Modbus RTU или J1939.', 'CAN / Modbus'],
   ['Ничего не установлено', 'Телефон в кабине: код из 6 цифр — и местоположение, пробег и работа двигателя пишутся даже без связи. Моточасы — по фото счётчика.', 'без затрат'],
 ];
@@ -125,9 +125,9 @@ function Landing() {
         <div className="mx-auto max-w-6xl px-6 py-14">
           <h2 className="text-2xl font-semibold tracking-tight">Скачать</h2>
           <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-            APK для Android и ZIP для Windows — сборки 24.09.2026 из текущих исходников:{' '}
-            <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/tag/android-2026.09.24">Android</a>,{' '}
-            <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/tag/desktop-2026.09.24">Windows</a>.
+            Архивные сборки 24.09.2026 перенесены без пересборки, они старше текущих исходников и не проверены на реальных устройствах:{' '}
+            <a className="underline" href="https://github.com/mikhailsilva/horisont/releases/tag/android-2026.09.24">Android</a>,{' '}
+            <a className="underline" href="https://github.com/mikhailsilva/horisont/releases/tag/desktop-2026.09.24">Windows</a>.
           </p>
           <div className="mt-6 grid gap-4 md:grid-cols-4">
             {DOWNLOADS.map((d) => (

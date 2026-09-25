@@ -2,7 +2,9 @@
 
 **v2 — работающий код и протокольный стенд; испытания на смонтированной машине впереди.** Архитектура и ответы заказчика — в [диздоке v2](docs/design/DESIGN-v2.md), проверенное состояние — в [ROADMAP](docs/ROADMAP.md). Отдельно собраны [решения из диалогов, ключи по именам и следующие шаги](docs/research/dialogue-decisions-and-next-steps.md) и [история восстановления](docs/research/project-history.md).
 
-Рабочие исходники публикуются в [`somemateria/biildfe4`](https://github.com/somemateria/biildfe4). APK и Windows ZIP пока доступны только в [прежней копии ITles](https://github.com/clutteredcal/ITles/releases/tag/v0.3.0): это релиз v0.3.0, **не сборка текущего коммита**. Перенос исходников не переносит бинарные релизы и не обновляет действующий Vercel.
+**Перенос 25.09.2026.** Актуальные исходники и полная история, включая PR #5, импортированы в этот репозиторий [`mikhailsilva/horisont`](https://github.com/mikhailsilva/horisont) из `raulwulff6769/framework-lab`: upstream — источник переноса, новые PR открываются здесь, а не в upstream или прежних [`somemateria/biildfe4`](https://github.com/somemateria/biildfe4) / [`clutteredcal/ITles`](https://github.com/clutteredcal/ITles). Перенос Git не меняет production-базу и действующий деплой Vercel: по последней проверке 24.09 `itles.vercel.app` обслуживает выпуск по закреплённому SHA из framework-lab. Новый код проверять локальными тестами и изолированным Preview ([руководство Vercel](docs/operations/vercel.md)).
+
+Архивные [APK Android](https://github.com/mikhailsilva/horisont/releases/tag/android-2026.09.24) и [ZIP Windows](https://github.com/mikhailsilva/horisont/releases/tag/desktop-2026.09.24) от 24.09 перенесены отдельными prerelease с исходными тегами и без пересборки. Они **старше текущего кода** и не проверены на физических устройствах; прежний v0.3.0 остался в [старой копии](https://github.com/clutteredcal/ITles/releases/tag/v0.3.0). Ключ подписи APK не переносился — обновления поверх этой сборки потребуют оригинальный ключ либо новой установки.
 
 | Часть | Где | Проверка |
 |---|---|---|
@@ -10,7 +12,7 @@
 | Шлюз трекеров (EGTS, Wialon IPS, Galileosky, Wialon Retranslator; ограниченный FLEX 1.0/2.0) | `gateway/` | `python -m pytest tests` (пакеты из набора Traccar для прежних протоколов; примеры производителя и имитатор для FLEX) |
 | Сквозной прогон трекер → шлюз → платформа | `scripts/gateway_e2e.py` | `.venv/bin/python scripts/gateway_e2e.py --output /tmp/itles-gateway-e2e.json` (отчёт вне Git); `docs/evidence/gateway-e2e.json` — архивный прогон трёх машин |
 | Проверка одометрии | `scripts/odometry_validation.py` | `docs/evidence/odometry-validation.json` |
-| Windows / Android | `apps/desktop`, `apps/mobile` | прежние сборки — в [релизе v0.3.0](https://github.com/clutteredcal/ITles/releases/tag/v0.3.0); наличие файлов не заменяет проверку на реальных устройствах |
+| Windows / Android | `apps/desktop`, `apps/mobile` | исходники здесь; архивные binaries 24.09 — в prerelease [`desktop-2026.09.24`](https://github.com/mikhailsilva/horisont/releases/tag/desktop-2026.09.24) и [`android-2026.09.24`](https://github.com/mikhailsilva/horisont/releases/tag/android-2026.09.24), не из текущей головы и без проверки на реальных устройствах |
 
 Запуск на своём сервере (VPS): `cd platform && pnpm install && pnpm build && DATABASE_URL=postgres://… SETUP_KEY=… GATEWAY_TOKEN=… node --import tsx dev/server.ts`;
 шлюз: `cd gateway && ITLES_API_URL=https://… GATEWAY_TOKEN=… python3 -m itles_gateway`.

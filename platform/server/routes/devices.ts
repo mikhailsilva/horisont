@@ -1,11 +1,22 @@
 // Data intake: phone in the cab (device token), Traccar Client (OsmAnd protocol) and TCP gateways.
 import { sha256 } from '../auth.js';
 import { bad, forbidden, HttpError, json, notFound, readJson } from '../http.js';
-import { device, finite, router } from '../core.js';
+import { audit, device, finite, router } from '../core.js';
 import type { Db } from '../db.js';
 import { ingestForSource, refitCalibrations, type IngestRecord } from '../ingest.js';
 import { newToken } from '../auth.js';
 import { randomUUID } from 'node:crypto';
+
+// An anonymous shared budget limits guesses without storing device IPs.
+const ENROLL_GLOBAL_FAIL_LIMIT = 100;
+
+async function enrollThrottle(db: Db): Promise<void> {
+  const r = await db.query<{ n: number }>(
+    `select count(*)::int as n from audit_log where action = 'enroll_failed' and t > now() - interval '15 minutes'`,
+  );
+  if (r.rows[0].n >= ENROLL_GLOBAL_FAIL_LIMIT)
+    throw new HttpError(429, 'locked', 'Слишком много попыток. Повторите через 15 минут');
+}
 
 router.on('POST', '/api/devices/enroll', async (c) => {
   const b = await readJson(c.req);
@@ -13,15 +24,23 @@ router.on('POST', '/api/devices/enroll', async (c) => {
   if (code.length !== 6) throw bad('bad_code', 'Код — 6 цифр');
   const token = newToken();
   const s = await c.db.tx(async (db) => {
-    const r = await db.query<any>(
-      `select id, machine_id from sources where enroll_code_hash = $1 and enroll_expires_at > now()
+    // One row lock serializes the check and failure count across server instances.
+    await db.query(`insert into settings (key, value) values ('enroll_throttle_lock', 'null'::jsonb)
+      on conflict (key) do update set updated_at = now()`);
+    await enrollThrottle(db);
+    const r = await db.query<{ id: string }>(
+      `select id from sources where enroll_code_hash = $1 and enroll_expires_at > now()
           and disabled_at is null and deleted_at is null for update`,
       [sha256('pair:' + code)],
     );
-    if (!r.rows[0]) throw bad('bad_code', 'Код неверный или истёк. Получите новый код на странице машины');
+    if (!r.rows[0]) {
+      await audit(db, null, 'enroll_failed');
+      return null;
+    }
     await db.query(`update sources set token_hash = $2, enroll_code_hash = null, enroll_expires_at = null where id = $1`, [r.rows[0].id, sha256(token)]);
     return r.rows[0];
   });
+  if (!s) throw bad('bad_code', 'Код неверный или истёк. Получите новый код на странице машины');
   return json({ token, config: await deviceConfig(c.db, s.id) }, 201);
 });
 

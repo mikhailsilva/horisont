@@ -2,6 +2,6 @@
   "name": "itles-preview",
   "private": true,
   "scripts": {
-    "dev": "pnpm --dir platform install --frozen-lockfile && pnpm --dir platform build:ui && cd platform && PORT=${PORT:-5173} node --import tsx dev/server.ts"
+    "dev": "pnpm --dir platform install --frozen-lockfile && pnpm --dir platform build:ui && cd platform && env -u DATABASE_URL -u SETUP_KEY -u GATEWAY_TOKEN -u APP_SECRET -u CRON_SECRET PORT=${PORT:-5173} node --import tsx dev/server.ts"
   }
 }

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
+import { getDb } from '../server/db.js';
 import { call, iso } from './helpers.js';
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'pglite:memory';
@@ -132,6 +133,26 @@ describe('platform API end-to-end (PGlite)', () => {
     expect(m.freshness).toBe('online');
     expect(m.engine_hours.method).toBe('device');
     expect(m.engine_hours.exact).toBe(false);
+  });
+
+  it('serializes anonymous enrollment failures across concurrent requests', async () => {
+    const db = await getDb();
+    await db.query(`delete from audit_log where action = 'enroll_failed'`);
+    const s = await call('POST', `/api/machines/${machineId}/sources`, { kind: 'phone' }, owner);
+    expect(s.data.expires_in_hours).toBe(2);
+    const code = s.data.pairing_code;
+    const wrong = code === '000000' ? '111111' : '000000';
+    const attempts = await Promise.all(Array.from({ length: 12 }, (_, i) =>
+      call('POST', '/api/devices/enroll', { code: wrong }, undefined, { 'x-forwarded-for': `192.0.2.${i + 1}` })));
+    expect(attempts.map((r) => r.status)).toEqual(Array(12).fill(400));
+    const failures = await db.query<{ details: unknown }>(`select details from audit_log where action = 'enroll_failed'`);
+    expect(failures.rows).toHaveLength(12);
+    expect(failures.rows.every((r) => r.details === null)).toBe(true);
+    for (let i = 12; i < 100; i++) {
+      expect((await call('POST', '/api/devices/enroll', { code: wrong })).status).toBe(400);
+    }
+    expect((await call('POST', '/api/devices/enroll', { code: wrong })).status).toBe(429);
+    expect((await call('POST', '/api/devices/enroll', { code }, undefined, { 'x-forwarded-for': '198.51.100.44' })).status).toBe(429);
   });
 
   it('dashboard readings become the ground truth and calibrate the estimate', async () => {

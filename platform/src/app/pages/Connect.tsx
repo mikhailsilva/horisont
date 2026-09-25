@@ -78,8 +78,13 @@ export function Connect({ me }: { me: Me }) {
   const wialonLogin = async () => {
     const host = prompt('Адрес страницы входа Wialon (hosting.wialon.com или адрес Wialon Local)', 'https://hosting.wialon.com');
     if (!host) return;
-    const r = await api('GET', `/api/connectors/wialon/login-url?host=${encodeURIComponent(host)}&redirect=${encodeURIComponent(location.href.split('#')[0] + '#/connect/wialon')}`);
-    location.href = r.url;
+    try {
+      setErr(null);
+      const r = await api('GET', `/api/connectors/wialon/login-url?host=${encodeURIComponent(host)}`);
+      location.href = r.url;
+    } catch (e) {
+      setErr(e);
+    }
   };
   return (
     <div className="space-y-6">
@@ -98,15 +103,17 @@ export function Connect({ me }: { me: Me }) {
                 {c.status === 'error' ? <span className="text-danger">{c.last_error}</span> : `синхронизация ${ago(c.last_sync_at)}`}
               </div>
             </div>
-            <button
-              className="btn-ghost px-3 py-1.5 text-xs"
-              onClick={async () => {
-                await api('POST', `/api/connectors/${c.id}/sync`).catch((e) => alert(e.message));
-                list.reload();
-              }}
-            >
-              Обновить
-            </button>
+            {can(me, 'connectors.manage') && (
+              <button
+                className="btn-ghost px-3 py-1.5 text-xs"
+                onClick={async () => {
+                  await api('POST', `/api/connectors/${c.id}/sync`).catch((e) => alert(e.message));
+                  list.reload();
+                }}
+              >
+                Обновить
+              </button>
+            )}
           </div>
         ))}
         {list.data?.connectors?.length === 0 && <div className="p-4 text-sm text-muted-foreground">Подключений пока нет.</div>}

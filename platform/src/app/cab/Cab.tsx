@@ -97,7 +97,7 @@ function Help({ denied }: { denied: boolean }) {
           <li>Chrome: значок слева от адреса → «Разрешения» → Местоположение: <b>«Разрешить»</b>. Обновите страницу.</li>
           <li>
             Для работы в фоне установите{' '}
-            <a className="underline" href="https://github.com/raulwulff6769/framework-lab/releases/download/android-2026.09.24/itles-android.apk">
+            <a className="underline" href="https://github.com/mikhailsilva/horisont/releases/download/android-2026.09.24/itles-android.apk">
               приложение ITles для Android
             </a>{' '}
             (фоновая служба) или Traccar Client из Google Play.

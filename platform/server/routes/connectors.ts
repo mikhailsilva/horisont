@@ -26,10 +26,21 @@ router.on('GET', '/api/connectors', async (c) => {
 });
 
 router.on('GET', '/api/connectors/wialon/login-url', async (c) => {
-  user(c);
+  const u = user(c);
+  if (!can(u, 'connectors.manage')) throw forbidden('Подключать платформы могут администраторы');
   const host = c.url.searchParams.get('host') ?? 'https://hosting.wialon.com';
-  const redirect = c.url.searchParams.get('redirect') ?? `${c.url.origin}/app/#/connect/wialon`;
-  return json({ url: wialonLoginUrl(host, redirect) });
+  let loginHost: URL;
+  try {
+    loginHost = new URL(host);
+  } catch {
+    throw bad('bad_host', 'Укажите HTTPS-адрес сервера Wialon');
+  }
+  if (loginHost.protocol !== 'https:' || loginHost.username || loginHost.password || loginHost.search || loginHost.hash)
+    throw bad('bad_host', 'Укажите HTTPS-адрес сервера Wialon без логина и параметров');
+  const redirect = `${c.url.origin}/app/#/connect/wialon`;
+  if (c.url.searchParams.has('redirect') && c.url.searchParams.get('redirect') !== redirect)
+    throw bad('bad_redirect', 'Возврат из Wialon разрешён только в этот кабинет');
+  return json({ url: wialonLoginUrl(loginHost.href, redirect) });
 });
 
 router.on('POST', '/api/connectors', async (c) => {
@@ -68,7 +79,7 @@ router.on('POST', '/api/connectors/:id/sync', async (c, { id }) => {
   const u = user(c);
   const k = (await c.db.query<any>(`select org_id from connectors where id = $1`, [id])).rows[0];
   if (!k) throw notFound();
-  await assertOrgVisible(c.db, u, k.org_id);
+  await assertCap(c.db, u, 'connectors.manage', k.org_id);
   try {
     return json({ report: await syncConnector(c.db, id) });
   } catch (e) {
@@ -91,6 +102,7 @@ router.on('DELETE', '/api/connectors/:id', async (c, { id }) => {
 /** Near-real-time refresh while someone is looking: sync connectors not synced in the last minute. */
 router.on('POST', '/api/refresh', async (c) => {
   const u = user(c);
+  if (!can(u, 'connectors.manage')) throw forbidden('Обновление подключений доступно администраторам');
   const orgs = await visibleOrgIds(c.db, u);
   const due = await c.db.query<any>(
     `select id from connectors where org_id = any($1::text[]) and status <> 'disabled'
