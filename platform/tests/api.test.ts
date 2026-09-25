@@ -135,6 +135,23 @@ describe('platform API end-to-end (PGlite)', () => {
     expect(m.engine_hours.exact).toBe(false);
   });
 
+  it('rejects a pairing code after its two-hour expiry', async () => {
+    const s = await call('POST', `/api/machines/${machineId}/sources`, { kind: 'phone' }, owner);
+    expect(s.status).toBe(201);
+    expect(s.data.expires_in_hours).toBe(2);
+    const db = await getDb();
+    const expiry = await db.query<{ remaining_seconds: number }>(
+      `select extract(epoch from (enroll_expires_at - now()))::float8 as remaining_seconds from sources where id = $1`,
+      [s.data.source_id],
+    );
+    expect(expiry.rows[0].remaining_seconds).toBeGreaterThan(7140);
+    expect(expiry.rows[0].remaining_seconds).toBeLessThanOrEqual(7200);
+    await db.query(`update sources set enroll_expires_at = now() - interval '1 second' where id = $1`, [s.data.source_id]);
+    const expired = await call('POST', '/api/devices/enroll', { code: s.data.pairing_code });
+    expect(expired.status).toBe(400);
+    expect(expired.data.error).toBe('bad_code');
+  });
+
   it('serializes anonymous enrollment failures across concurrent requests', async () => {
     const db = await getDb();
     await db.query(`delete from audit_log where action = 'enroll_failed'`);

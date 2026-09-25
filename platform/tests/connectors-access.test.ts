@@ -1,5 +1,6 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { getDb } from '../server/db.js';
+import { encryptSecret } from '../server/secrets.js';
 import { call } from './helpers.js';
 
 process.env.DATABASE_URL = process.env.TEST_DATABASE_URL ?? 'pglite:memory';
@@ -67,6 +68,9 @@ describe('connector administration', () => {
     expect(url.origin).toBe('https://wialon.integrator.example');
     expect(url.pathname).toBe('/login.html');
     expect(url.searchParams.get('redirect_uri')).toBe('http://localhost/app/#/connect/wialon');
+    const local = await call('GET', '/api/connectors/wialon/login-url?host=https%3A%2F%2Fwialon.integrator.example%2Ffleet%2F', undefined, admin);
+    expect(local.status).toBe(200);
+    expect(new URL(local.data.url).pathname).toBe('/fleet/login.html');
   });
 
   it('keeps connectors inside an organisation tree and lets its distributor administer them', async () => {
@@ -74,6 +78,22 @@ describe('connector administration', () => {
     expect((await call('POST', `/api/connectors/${connectorId}/sync`, {}, otherAdmin)).status).toBe(404);
     expect((await call('DELETE', `/api/connectors/${connectorId}`, undefined, otherAdmin)).status).toBe(404);
     expect((await call('GET', '/api/connectors', undefined, dealerAdmin)).data.connectors).toHaveLength(1);
+    await (await getDb()).query(
+      `update connectors set kind = 'traccar', base_url = 'https://traccar.example', secret_enc = $2 where id = $1`,
+      [connectorId, encryptSecret(JSON.stringify({ token: 'test-token' }))],
+    );
+    const fetchStub = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      expect(String(url)).toMatch(/^https:\/\/traccar\.example\/api\/(devices|positions)$/);
+      return new Response('[]', { headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      const sync = await call('POST', `/api/connectors/${connectorId}/sync`, {}, dealerAdmin);
+      expect(sync.status).toBe(200);
+      expect(sync.data.report.units).toBe(0);
+      expect(fetchStub).toHaveBeenCalledTimes(2);
+    } finally {
+      fetchStub.mockRestore();
+    }
     expect((await call('DELETE', `/api/connectors/${connectorId}`, undefined, dealerAdmin)).status).toBe(200);
   });
 });
