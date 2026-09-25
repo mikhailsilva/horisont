@@ -1,13 +1,14 @@
 {
   "name": "itles-desktop",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "ITles — кабинет мониторинга спецтехники для Windows",
   "author": "ITles",
   "main": "main.js",
   "private": true,
   "scripts": {
     "prepare-web": "node -e \"const fs=require('fs');fs.rmSync('web',{recursive:true,force:true});fs.cpSync('../../platform/dist','web',{recursive:true})\"",
-    "dist:win": "npm run prepare-web && electron-builder --win nsis --x64 --publish never --config.win.artifactName='ITles-Setup-${version}.${ext}' && electron-builder --win zip --x64 --publish never --config.win.artifactName='ITles-Windows-x64-${version}.${ext}'"
+    "dist:win": "npm run prepare-web && electron-builder --win zip --x64 --publish never --config.win.artifactName='ITles-Windows-x64-${version}.${ext}'",
+    "dist:win:installer": "npm run prepare-web && electron-builder --win nsis --x64 --publish never --config.win.artifactName='ITles-Setup-${version}.${ext}'"
   },
   "devDependencies": {
     "electron": "44.4.5",
@@ -16,9 +17,9 @@
   "build": {
     "appId": "ru.itles.desktop",
     "productName": "ITles",
-    "files": ["main.js", "web/**/*"],
+    "files": ["main.js", "icon.ico", "web/**/*"],
     "directories": { "output": "release" },
-    "win": { "target": ["nsis", "zip"], "signAndEditExecutable": false },
+    "win": { "target": ["nsis", "zip"], "icon": "icon.ico", "signAndEditExecutable": false },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "shortcutName": "ITles", "language": "1049" }
   }
 }

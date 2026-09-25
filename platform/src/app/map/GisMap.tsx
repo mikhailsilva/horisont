@@ -2,13 +2,15 @@
 // area tools on the WGS-84 ellipsoid, cursor coordinates, scale bar, fullscreen, geofences, tracks
 // coloured by speed, stops and a moving cursor for the timeline.
 import { useEffect, useRef, useState } from 'react';
-import type { GeoJSONSource, Map as MlMap, MapMouseEvent, StyleSpecification } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MlMap, MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { Crosshair, Layers, Maximize2, Mountain, Ruler, Square, Trash2 } from 'lucide-react';
+import { Crosshair, Layers, Maximize2, Moon, Mountain, Radio, Ruler, Square, Sun, Trash2 } from 'lucide-react';
 import { geodesicM, polygonArea } from '../../../server/domain/geodesy';
-import { getTheme, useTheme } from '../theme';
 import { usePreferences } from '../preferences';
+import { buildingExtrusionLayer } from './buildings';
+import { styleFor, type Base } from './mapStyle';
+import { nightPaintForLayer } from './nightPalette';
 
 export interface GisMarker {
   id: string;
@@ -32,43 +34,19 @@ export interface TrackPoint {
   speed: number | null;
 }
 
-type Base = 'scheme' | 'satellite' | 'hybrid' | 'topo';
 const BASES: Array<{ id: Base; label: string }> = [
   { id: 'scheme', label: 'Схема' },
   { id: 'satellite', label: 'Спутник' },
   { id: 'hybrid', label: 'Гибрид' },
   { id: 'topo', label: 'Топокарта' },
 ];
-const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
 const ESRI_IMAGERY = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
 const ESRI_ATTR = 'Снимки © Esri, Maxar, Earthstar Geographics';
 const DEM_TILES = 'https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png';
 
-function rasterStyle(tiles: string[], attribution: string, maxzoom: number): StyleSpecification {
-  return {
-    version: 8,
-    glyphs: GLYPHS,
-    sources: { base: { type: 'raster', tiles, tileSize: 256, attribution, maxzoom } },
-    layers: [{ id: 'base', type: 'raster', source: 'base' }],
-  };
-}
-
-function styleFor(base: Base): string | StyleSpecification {
-  const theme = getTheme();
-  if (base === 'scheme') return theme === 'dark' ? 'https://tiles.openfreemap.org/styles/dark' : 'https://tiles.openfreemap.org/styles/liberty';
-  if (base === 'satellite') return rasterStyle([ESRI_IMAGERY], ESRI_ATTR, 17);
-  if (base === 'topo')
-    return rasterStyle(
-      ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'],
-      '© OpenTopoMap (CC-BY-SA), © участники OpenStreetMap',
-      17,
-    );
-  return 'https://tiles.openfreemap.org/styles/liberty';
-}
-
 const EMPTY = { type: 'FeatureCollection' as const, features: [] as any[] };
 
-function localize(m: MlMap, base: Base) {
+function localize(m: MlMap, base: Base, theme: 'light' | 'dark') {
   const style = m.getStyle();
   if (base === 'hybrid') {
     // satellite under the vector roads and Russian labels of the OSM style
@@ -76,10 +54,10 @@ function localize(m: MlMap, base: Base) {
     const first = style.layers.find((l) => l.type !== 'background')?.id;
     m.addLayer({ id: 'sat', type: 'raster', source: 'sat' }, first);
     for (const l of style.layers as any[]) {
-      if (l.type === 'fill' || l.type === 'fill-extrusion' || l.type === 'background') m.setLayoutProperty(l.id, 'visibility', 'none');
+      if (l.type === 'fill' || l.type === 'background') m.setLayoutProperty(l.id, 'visibility', 'none');
       if (l.type === 'symbol') {
-        m.setPaintProperty(l.id, 'text-color', '#ffffff');
-        m.setPaintProperty(l.id, 'text-halo-color', 'rgba(0,0,0,0.85)');
+        m.setPaintProperty(l.id, 'text-color', theme === 'dark' ? '#a0a0a0' : '#ffffff');
+        m.setPaintProperty(l.id, 'text-halo-color', theme === 'dark' ? 'rgba(0,0,0,0.9)' : 'rgba(0,0,0,0.85)');
       }
     }
   }
@@ -145,6 +123,8 @@ export function GisMap({
   height = 420,
   onPick,
   onSaveArea,
+  isHistorical = false,
+  onReturnLive,
   fitKey,
 }: {
   markers?: GisMarker[];
@@ -156,15 +136,22 @@ export function GisMap({
   height?: number;
   onPick?: (id: string) => void;
   onSaveArea?: (ring: Array<[number, number]>, areaM2: number) => void;
+  isHistorical?: boolean;
+  onReturnLive?: () => void;
   fitKey?: string;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
-  const [theme] = useTheme();
   const [preferences, savePreferences] = usePreferences();
   const base: Base = preferences.mapBase ?? 'scheme';
+  const mapTheme = preferences.mapTheme ?? 'light';
+  const baseRef = useRef(base);
+  const mapThemeRef = useRef(mapTheme);
+  baseRef.current = base;
+  mapThemeRef.current = mapTheme;
   const setBase = (mapBase: Base) => savePreferences({ mapBase });
+  const setMapTheme = (mapTheme: 'light' | 'dark') => savePreferences({ mapTheme });
   const relief = preferences.mapRelief ?? false;
   const setRelief = (mapRelief: boolean) => savePreferences({ mapRelief });
   const [gen, setGen] = useState(0);
@@ -194,7 +181,7 @@ export function GisMap({
       ml.setWorkerUrl(maplibreWorkerUrl);
       let m: MlMap;
       try {
-        m = new ml.Map({ container: el.current, style: styleFor('scheme'), center: [37.6, 58], zoom: 3, attributionControl: { compact: true }, doubleClickZoom: true });
+        m = new ml.Map({ container: el.current, style: styleFor(baseRef.current, mapThemeRef.current), center: [37.6, 58], zoom: 3, attributionControl: { compact: true }, doubleClickZoom: true });
       } catch {
         setFailed(true);
         return;
@@ -223,25 +210,27 @@ export function GisMap({
     };
   }, []);
 
-  // base layer or theme change → new style; overlays are re-added on style.load
-  const firstStyle = useRef(true);
+  // base layer or map theme change → new style; overlays are re-added on style.load
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    if (firstStyle.current && base === 'scheme') {
-      firstStyle.current = false;
-      return;
-    }
-    firstStyle.current = false;
-    m.setStyle(styleFor(base) as any);
-  }, [base, theme]);
+    m.setStyle(styleFor(base, mapTheme) as any);
+  }, [base, mapTheme]);
 
   useEffect(() => {
     const m = map.current;
     if (!m || gen === 0) return;
     if (!m.getSource('i-points')) {
-      localize(m, base);
-      addOverlays(m, getTheme() === 'dark' && base === 'scheme');
+      if (mapTheme === 'dark') {
+        for (const layer of m.getStyle().layers ?? []) {
+          for (const [property, value] of Object.entries(nightPaintForLayer(layer as any)))
+            m.setPaintProperty(layer.id, property as any, value as any);
+        }
+      }
+      localize(m, base, mapTheme);
+      const extrusion = buildingExtrusionLayer(m.getStyle() as any, mapTheme);
+      if (extrusion) m.addLayer(extrusion.layer as any, extrusion.beforeId);
+      addOverlays(m, mapTheme === 'dark');
     }
     if (relief) {
       if (!m.getSource('dem')) {
@@ -367,8 +356,9 @@ export function GisMap({
 
   if (failed)
     return (
-      <div style={{ height: Math.min(height, 160) }} className="flex w-full items-center justify-center rounded-xl border border-border bg-card px-6 text-center text-sm text-muted-foreground">
-        Карта требует WebGL2: включите аппаратное ускорение в настройках браузера.
+      <div style={{ height: Math.min(height, 160) }} className="flex w-full flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 text-center text-sm text-muted-foreground">
+        <span>Карта требует WebGL2: включите аппаратное ускорение в настройках браузера.</span>
+        {isHistorical && onReturnLive && <button className="btn-ghost px-3 py-1.5" onClick={onReturnLive}><Radio className="h-3.5 w-3.5" /> Реальное время</button>}
       </div>
     );
   const btn = (active: boolean) => `flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium shadow-sm ${active ? 'bg-primary text-primary-foreground' : 'bg-card/95 text-foreground hover:bg-accent'}`;
@@ -380,6 +370,16 @@ export function GisMap({
         <button className={btn(layersOpen)} onClick={() => setLayersOpen(!layersOpen)} title="Слои карты">
           <Layers className="h-3.5 w-3.5" /> {BASES.find((b) => b.id === base)?.label}
         </button>
+        <button
+          className={btn(false)}
+          onClick={() => setMapTheme(mapTheme === 'dark' ? 'light' : 'dark')}
+          aria-label={mapTheme === 'dark' ? 'Включить дневную карту' : 'Включить ночную карту'}
+          title={mapTheme === 'dark' ? 'Дневная карта' : 'Ночная карта'}
+        >
+          {mapTheme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+          {mapTheme === 'dark' ? 'День' : 'Ночь'}
+        </button>
+        {isHistorical && onReturnLive && <button className={btn(false)} onClick={onReturnLive} title="Вернуться к реальному времени"><Radio className="h-3.5 w-3.5" /> Сейчас</button>}
         <button className={btn(tool === 'ruler')} onClick={() => toggleTool('ruler')} title="Линейка: щёлкайте по карте; Esc — сброс">
           <Ruler className="h-3.5 w-3.5" /> Линейка
         </button>

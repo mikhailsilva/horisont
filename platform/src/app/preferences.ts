@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api';
 
-export type Preferences = { mapBase?: 'scheme' | 'satellite' | 'hybrid' | 'topo'; theme?: 'light' | 'dark'; mapRelief?: boolean };
+export type Preferences = { mapBase?: 'scheme' | 'satellite' | 'hybrid' | 'topo'; mapTheme?: 'light' | 'dark'; theme?: 'light' | 'dark'; mapRelief?: boolean };
 let account: string | null = null;
 let current: Preferences = {};
 let queue = Promise.resolve();

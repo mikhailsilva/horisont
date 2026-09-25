@@ -111,6 +111,16 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
   const [speed, setSpeed] = useState(60);
   const [follow, setFollow] = useState(false);
   const live = preset === 'today' || preset === '24h' || preset === '3d' || preset === '7d';
+  const isHistorical = !live || playing || t < range[1] - 1000;
+  const returnLive = () => {
+    const now = Date.now();
+    setPreset('24h');
+    setDay('');
+    setRange([now - 86400e3, now]);
+    setT(now);
+    setPlaying(false);
+    setFollow(true);
+  };
 
   const pick = (k: string) => {
     const p = presets.find((x) => x.k === k)!;
@@ -211,6 +221,7 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
             </button>
           ))}
           <input type="date" className="input h-8 w-36 py-0 text-xs" value={day} max={new Date().toISOString().slice(0, 10)} onChange={(e) => pickDay(e.target.value)} />
+          <button className="btn-ghost h-8 px-2 text-xs" onClick={returnLive} disabled={!isHistorical}>В реальное время</button>
         </div>
       </div>
       <ErrorLine e={tl.error} />
@@ -224,6 +235,8 @@ export function MachineTimeline({ id, geofences, liveTick }: { id: string; geofe
           follow={follow}
           height={440}
           fitKey={`${id}:${preset}:${day}`}
+          isHistorical={isHistorical}
+          onReturnLive={returnLive}
         />
       )}
       <div className="space-y-2">

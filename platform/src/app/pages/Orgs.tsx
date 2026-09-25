@@ -8,10 +8,10 @@ import { ALL_BLOCKS, BLOCKS, ROLES, type Block, type Role } from '../../../serve
 const KIND_RU: Record<string, string> = { fuchs: 'FUCHS', distributor: 'Дистрибьютор', customer: 'Клиент' };
 
 // уровень организации показывается цветной полосой, права определяются ролью сотрудника, а не уровнем
-const LEVEL: Record<string, { tint: string; badge: string; dot: string; hint: string; indent: string }> = {
-  fuchs: { tint: 'bg-violet-500/10', badge: 'bg-violet-500/15 text-violet-800 dark:text-violet-300', dot: 'bg-violet-500', hint: 'верхний уровень', indent: '' },
-  distributor: { tint: 'bg-sky-500/10', badge: 'bg-sky-500/15 text-sky-800 dark:text-sky-300', dot: 'bg-sky-500', hint: 'управляет своими клиентами', indent: 'ml-3' },
-  customer: { tint: 'bg-amber-500/10', badge: 'bg-amber-500/15 text-amber-900 dark:text-amber-300', dot: 'bg-amber-500', hint: 'своя организация и техника', indent: 'ml-6' },
+const LEVEL: Record<string, { width: number; hint: string }> = {
+  fuchs: { width: 6, hint: 'верхний уровень' },
+  distributor: { width: 18, hint: 'управляет своими клиентами' },
+  customer: { width: 30, hint: 'своя организация и техника' },
 };
 
 function Visibility({ user, onClose, onSaved }: { user: any; onClose: () => void; onSaved: () => void }) {
@@ -267,26 +267,24 @@ export function Orgs({ me }: { me: Me }) {
         <span className="font-medium text-foreground">Уровни:</span>
         {(['fuchs', 'distributor', 'customer'] as const).map((k) => (
           <span key={k} className="flex items-center gap-1.5">
-            <span className={`h-2.5 w-2.5 rounded-sm ${LEVEL[k].dot}`} />
+            <span className="h-2.5 rounded-sm bg-[#7c9082]" style={{ width: LEVEL[k].width }} aria-hidden />
             <span>
               {KIND_RU[k]} — {LEVEL[k].hint}
             </span>
           </span>
         ))}
-        <span className="w-full">Слева — старший уровень; каждая ступень вправо — более узкая область управления. Действия сотрудника определяет его роль.</span>
+        <span className="w-full">Шире полоса — глубже уровень. Все строки выровнены; действия сотрудника определяет его роль.</span>
       </div>
       <div className="space-y-3">
         {ordered.map((o) => {
           const lv = LEVEL[o.kind] ?? LEVEL.customer;
           return (
-            <div key={o.id} data-org-level={o.kind} className={`card flex overflow-hidden ${lv.indent}`}>
-              {o.kind !== 'fuchs' && <span className="w-1 shrink-0 bg-violet-500/40" aria-hidden />}
-              {o.kind === 'customer' && <span className="w-1 shrink-0 bg-sky-500/50" aria-hidden />}
-              <span className={`w-1.5 shrink-0 ${lv.dot}`} aria-hidden />
-              <div className={`min-w-0 flex-1 p-4 sm:p-5 ${lv.tint}`}>
+            <div key={o.id} data-org-level={o.kind} className="card relative overflow-hidden">
+              <span className="absolute inset-y-0 left-0 bg-[#7c9082]/45" style={{ width: lv.width }} aria-hidden />
+              <div className="min-w-0 py-4 pr-4 pl-11 sm:py-5 sm:pr-5 sm:pl-12">
                 <div className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2" onClick={() => setOpen(open === o.id ? null : o.id)}>
                   <div className="min-w-0">
-                    <span className={`badge mr-2 ${lv.badge}`}>{KIND_RU[o.kind]}</span>
+                    <span className="badge mr-2 bg-muted text-muted-foreground">{KIND_RU[o.kind]}</span>
                     <b>{o.name}</b>
                     <span className="ml-2 text-sm text-muted-foreground">
                       {o.machines} машин · {o.users} пользователей
