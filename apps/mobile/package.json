@@ -1,6 +1,6 @@
 {
   "name": "itles-mobile",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "private": true,
   "description": "ITles для Android/iOS: кабинет и режим «Телефон в кабине» (Capacitor)",
   "scripts": {
