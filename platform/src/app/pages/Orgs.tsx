@@ -8,10 +8,10 @@ import { ALL_BLOCKS, BLOCKS, ROLES, type Block, type Role } from '../../../serve
 const KIND_RU: Record<string, string> = { fuchs: 'FUCHS', distributor: 'Дистрибьютор', customer: 'Клиент' };
 
 // уровень организации показывается цветной полосой, права определяются ролью сотрудника, а не уровнем
-const LEVEL: Record<string, { tint: string; badge: string; dot: string; hint: string }> = {
-  fuchs: { tint: 'bg-primary/5', badge: 'bg-primary/10 text-primary', dot: 'bg-primary', hint: 'владелец системы' },
-  distributor: { tint: 'bg-warning/5', badge: 'bg-warning/10 text-warning', dot: 'bg-warning', hint: 'подключает своих клиентов' },
-  customer: { tint: 'bg-success/5', badge: 'bg-success/10 text-success', dot: 'bg-success', hint: 'своя техника и сотрудники' },
+const LEVEL: Record<string, { tint: string; badge: string; dot: string; hint: string; indent: string }> = {
+  fuchs: { tint: 'bg-violet-500/10', badge: 'bg-violet-500/15 text-violet-800 dark:text-violet-300', dot: 'bg-violet-500', hint: 'верхний уровень', indent: '' },
+  distributor: { tint: 'bg-sky-500/10', badge: 'bg-sky-500/15 text-sky-800 dark:text-sky-300', dot: 'bg-sky-500', hint: 'управляет своими клиентами', indent: 'ml-3' },
+  customer: { tint: 'bg-amber-500/10', badge: 'bg-amber-500/15 text-amber-900 dark:text-amber-300', dot: 'bg-amber-500', hint: 'своя организация и техника', indent: 'ml-6' },
 };
 
 function Visibility({ user, onClose, onSaved }: { user: any; onClose: () => void; onSaved: () => void }) {
@@ -273,13 +273,15 @@ export function Orgs({ me }: { me: Me }) {
             </span>
           </span>
         ))}
-        <span className="w-full sm:ml-auto sm:w-auto">Права задаёт роль сотрудника, а не уровень организации</span>
+        <span className="w-full">Слева — старший уровень; каждая ступень вправо — более узкая область управления. Действия сотрудника определяет его роль.</span>
       </div>
       <div className="space-y-3">
         {ordered.map((o) => {
           const lv = LEVEL[o.kind] ?? LEVEL.customer;
           return (
-            <div key={o.id} className="card flex overflow-hidden">
+            <div key={o.id} data-org-level={o.kind} className={`card flex overflow-hidden ${lv.indent}`}>
+              {o.kind !== 'fuchs' && <span className="w-1 shrink-0 bg-violet-500/40" aria-hidden />}
+              {o.kind === 'customer' && <span className="w-1 shrink-0 bg-sky-500/50" aria-hidden />}
               <span className={`w-1.5 shrink-0 ${lv.dot}`} aria-hidden />
               <div className={`min-w-0 flex-1 p-4 sm:p-5 ${lv.tint}`}>
                 <div className="grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-2" onClick={() => setOpen(open === o.id ? null : o.id)}>
