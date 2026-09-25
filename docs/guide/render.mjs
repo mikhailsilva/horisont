@@ -4,9 +4,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const dir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(dir, '../..');
-const sourcePath = resolve(dir, 'rf-hardware-chain.md');
-const htmlPath = resolve(dir, 'rf-hardware-chain.html');
-const pdfPath = resolve(dir, 'rf-hardware-chain.pdf');
+// usage: node docs/guide/render.mjs [basename]   (default: rf-hardware-chain)
+const name = process.argv[2] ?? 'rf-hardware-chain';
+const sourcePath = resolve(dir, `${name}.md`);
+const htmlPath = resolve(dir, `${name}.html`);
+const pdfPath = resolve(dir, `${name}.pdf`);
 
 function escapeHtml(text) {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');
@@ -115,12 +117,13 @@ function renderMarkdown(markdown) {
 
 const markdown = await readFile(sourcePath, 'utf8');
 const body = renderMarkdown(markdown);
+const title = 'ITles — ' + (markdown.match(/^#\s+(.+)$/m)?.[1] ?? name);
 const html = `<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ITles — от датчика на машине до данных в сервисе</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     @page { size: A4; margin: 17mm 18mm 19mm; }
     :root { color-scheme: light; }

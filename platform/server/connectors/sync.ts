@@ -2,6 +2,7 @@ import type { Db } from '../db.js';
 import { decryptSecret } from '../secrets.js';
 import { ingestForSource, type IngestResult } from '../ingest.js';
 import { aempUnits } from './aemp.js';
+import { autographUnits } from './autograph.js';
 import { traccarUnits } from './traccar.js';
 import { ConnectorError, type RemoteUnit } from './types.js';
 import { wialonUnits } from './wialon.js';
@@ -14,6 +15,7 @@ export interface SyncReport {
 }
 
 export async function fetchUnits(kind: string, baseUrl: string, secret: any, historyFrom?: Date): Promise<RemoteUnit[]> {
+  if (kind === 'autograph') return autographUnits({ baseUrl, ...secret }, historyFrom);
   if (kind === 'traccar') return traccarUnits({ baseUrl, ...secret }, historyFrom);
   if (kind === 'wialon') return wialonUnits({ baseUrl, token: secret.token }, historyFrom);
   if (kind === 'aemp') return aempUnits({ baseUrl, ...secret });

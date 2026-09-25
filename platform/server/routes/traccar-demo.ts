@@ -48,7 +48,12 @@ function readTraccarDemoToken(token: string): { userId: string } {
 async function authorizedDemoUser(c: Ctx): Promise<void> {
   const header = c.req.headers.get('authorization') ?? '';
   if (!header.startsWith('Bearer ')) throw TOKEN_ERROR();
-  const claims = readTraccarDemoToken(header.slice(7).trim());
+  await assertDemoToken(c, header.slice(7).trim());
+}
+
+/** Shared by the synthetic Traccar and АвтоГРАФ.WEB emulators: token of an active real superadmin. */
+export async function assertDemoToken(c: Ctx, token: string): Promise<void> {
+  const claims = readTraccarDemoToken(token);
   const result = await c.db.query(
     `select 1 from users u join orgs o on o.id = u.org_id
       where u.id = $1 and u.role = 'superadmin' and not u.disabled and u.deleted_at is null
@@ -96,10 +101,11 @@ function makePosition(device: (typeof units)[number], at: number) {
   };
 }
 
-router.on('POST', '/api/connectors/traccar-demo-access', async (c) => {
+/** Only an active, real (non-demo) FUCHS superadmin may issue synthetic connector credentials. */
+export async function assertDemoIssuer(c: Ctx): Promise<string> {
   const current = user(c);
   if (current.role !== 'superadmin' || current.org_kind !== 'fuchs' || current.is_demo)
-    throw forbidden('Demo-доступ Traccar может выдать только реальный суперадминистратор');
+    throw forbidden('Demo-доступ может выдать только реальный суперадминистратор');
   const active = await c.db.query(
     `select 1 from users u join orgs o on o.id = u.org_id
       where u.id = $1 and u.role = 'superadmin' and not u.disabled and u.deleted_at is null
@@ -107,10 +113,15 @@ router.on('POST', '/api/connectors/traccar-demo-access', async (c) => {
     [current.id],
   );
   if (!active.rows.length) throw forbidden('Учётная запись не имеет доступа к demo-коннектору');
+  return current.id;
+}
+
+router.on('POST', '/api/connectors/traccar-demo-access', async (c) => {
+  const userId = await assertDemoIssuer(c);
   const expiresAt = Date.now() + TOKEN_TTL_MS;
   return json({
     base_url: `${c.url.origin}/api/traccar-demo`,
-    token: createTraccarDemoToken(current.id, expiresAt),
+    token: createTraccarDemoToken(userId, expiresAt),
     expires_at: new Date(expiresAt).toISOString(),
   });
 });

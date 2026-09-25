@@ -5,6 +5,16 @@ import { ErrorLine, useAsync } from '../ui';
 
 const KINDS = [
   {
+    kind: 'autograph',
+    title: 'АвтоГРАФ (ТехноКом)',
+    hint: 'Основной способ. Контроллеры АвтоГРАФ читают CAN-шину машины (моточасы, топливо, обороты, температура) и GPS/ГЛОНАСС и передают их на сервер АвтоГРАФ. Укажите адрес АвтоГРАФ.WEB и пользователя, у роли которого включено право «Доступ через API». ITles только читает данные.',
+    fields: [
+      ['base_url', 'Адрес АвтоГРАФ.WEB', 'https://web.ваш-дилер.ru'],
+      ['username', 'Логин пользователя API', ''],
+      ['password', 'Пароль', ''],
+    ],
+  },
+  {
     kind: 'wialon',
     title: 'Wialon (Hosting или Local у интегратора)',
     hint: 'Самая распространённая платформа у интеграторов. Wialon Hosting недоступен с российских адресов, поэтому российские парки обычно работают на Wialon Local — укажите адрес вашего сервера.',
@@ -45,7 +55,7 @@ export function Connect({ me }: { me: Me }) {
   const list = useAsync(() => api('GET', '/api/connectors'), []);
   const orgs = useAsync(() => api('GET', '/api/orgs'), []);
   const customers = (orgs.data?.orgs ?? []).filter((o: any) => o.kind === 'customer');
-  const [kind, setKind] = useState('wialon');
+  const [kind, setKind] = useState('autograph');
   const [f, setF] = useState<Record<string, string>>({});
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +78,12 @@ export function Connect({ me }: { me: Me }) {
     setTestResult(null);
     setOk(null);
     try {
+      if (kind === 'autograph') {
+        const r = await api('POST', '/api/connectors/autograph-demo-access', {});
+        setF((old) => ({ org_id: old.org_id ?? '', base_url: r.base_url, username: r.username, password: r.password, label: 'АвтоГРАФ — личный тест (синтетика)' }));
+        setDemoExpires(r.expires_at);
+        return;
+      }
       const r = await api('POST', '/api/connectors/traccar-demo-access', {});
       setF((old) => ({ org_id: old.org_id ?? '', base_url: r.base_url, token: r.token, label: 'Traccar — личный тест (синтетика)' }));
       setDemoExpires(r.expires_at);
@@ -99,9 +115,9 @@ export function Connect({ me }: { me: Me }) {
       setBusy(false);
     }
   };
-  const testTraccar = async () => {
-    if (!f.token && !(f.email && f.password)) {
-      setErr(new Error('Укажите токен или e-mail и пароль Traccar'));
+  const testConnection = async () => {
+    if (kind === 'autograph' ? !(f.username && f.password) : !f.token && !(f.email && f.password)) {
+      setErr(new Error(kind === 'autograph' ? 'Укажите логин и пароль АвтоГРАФ.WEB' : 'Укажите токен или e-mail и пароль Traccar'));
       return;
     }
     setTestBusy(true);
@@ -109,7 +125,9 @@ export function Connect({ me }: { me: Me }) {
     setTestResult(null);
     try {
       const r = await api('POST', '/api/connectors/test', {
-        base_url: normalizeTraccarBaseUrl(f.base_url ?? ''),
+        kind,
+        base_url: kind === 'traccar' ? normalizeTraccarBaseUrl(f.base_url ?? '') : (f.base_url ?? '').trim(),
+        username: f.username,
         email: f.email,
         password: f.password,
         token: f.token,
@@ -167,14 +185,35 @@ export function Connect({ me }: { me: Me }) {
       </div>
       {can(me, 'connectors.manage') && (
         <form onSubmit={submit} className="card space-y-4 p-5">
-          <div className="flex flex-wrap gap-2">
-            {KINDS.map((x) => (
+          <div className="flex flex-wrap items-center gap-2">
+            {KINDS.map((x, i) => (
               <button type="button" key={x.kind} onClick={() => { setKind(x.kind); setF((v) => ({ org_id: v.org_id ?? '' })); setErr(null); setOk(null); setTestResult(null); setDemoExpires(null); }} className={`rounded-xl px-3 py-2 text-sm font-medium ${kind === x.kind ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
                 {x.title}
+                {i === 0 && <span className="ml-2 rounded-full bg-background/25 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">основной</span>}
               </button>
-            ))}
+            )).flatMap((b, i) => (i === 1 ? [<span key="extra" className="px-1 text-xs text-muted-foreground">Дополнительно:</span>, b] : [b]))}
           </div>
           <p className="text-sm text-muted-foreground">{k.hint}</p>
+          {kind === 'autograph' && (
+            <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm space-y-2" data-testid="autograph-paths">
+              <p><b>Как данные АвтоГРАФ попадают в ITles.</b> Выберите путь, который уже есть у вашего дилера ТехноКом:</p>
+              <ol className="list-decimal space-y-1 pl-5 text-muted-foreground">
+                <li><b className="text-foreground">API АвтоГРАФ.WEB</b> — эта форма: без нового оборудования и перенастройки контроллеров.</li>
+                <li><b className="text-foreground">Второй сервер контроллера</b> — АвтоГРАФ серии X передаёт копию данных по EGTS или Wialon IPS 2.1 прямо в шлюз ITles, основной сервер дилера продолжает работать. Адрес шлюза выдаётся при пилоте.</li>
+                <li><b className="text-foreground">Ретрансляция АвтоГРАФ.Сервер</b> — сервер дилера пересылает весь парк по EGTS в шлюз ITles.</li>
+              </ol>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <button type="button" className="btn-ghost" disabled={busy || testBusy} onClick={() => { setF((old) => ({ org_id: old.org_id ?? '', base_url: 'https://demo.tk-nav.com', username: 'demo', password: 'demo', label: 'АвтоГРАФ — публичное демо ТехноКом' })); setDemoExpires(null); setTestResult(null); setErr(null); }}>
+                  Публичное демо ТехноКом
+                </button>
+                {me.role === 'superadmin' && !me.is_demo && (
+                  <button type="button" className="btn-ghost" onClick={prepareDemo} disabled={busy || testBusy}>Заполнить личный тест · 3 машины</button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Публичное демо — настоящий сервер АвтоГРАФ.WEB производителя с архивными данными 2013 года: годится для «Проверить без сохранения», импорт разрешён только в демо-клиента. Личный тест — синтетический эмулятор API внутри ITles (К-742М, John Deere 8R, МТЗ-82.1), не реальные контроллеры.</p>
+              {demoExpires && <p>Доступ действует до {new Date(demoExpires).toLocaleString('ru-RU')}. До нажатия «Подключить» машины в парк не добавляются.</p>}
+            </div>
+          )}
           {kind === 'traccar' && me.role === 'superadmin' && !me.is_demo && (
             <div className="rounded-xl border border-border bg-muted/40 p-4 text-sm">
               <button type="button" className="btn-ghost" onClick={prepareDemo} disabled={busy || testBusy}>Заполнить личный тест · 3 машины</button>
@@ -224,9 +263,9 @@ export function Connect({ me }: { me: Me }) {
               )}
             </div>
           )}
-          {kind === 'traccar' && (
+          {(kind === 'traccar' || kind === 'autograph') && (
             <div className="flex flex-wrap items-center gap-3">
-              <button type="button" className="btn-ghost" onClick={testTraccar} disabled={busy || testBusy}>
+              <button type="button" className="btn-ghost" onClick={testConnection} disabled={busy || testBusy}>
                 {testBusy ? 'Проверяем доступ…' : 'Проверить без сохранения'}
               </button>
               <span className="text-xs text-muted-foreground">Проверка не создаёт подключение или машины.</span>

@@ -1,0 +1,23 @@
+{
+  "note": "Read-only runs of platform/scripts/autograph-check.ts (counts only). demo.tk-nav.com is the vendor's public АвтоГРАФ.WEB demo; the VDS serves three synthetic machines. Not a mounted-machine test.",
+  "vendor_demo_history_2h": {
+    "checked_at": "2026-09-25T11:36:03.320Z",
+    "server": "demo.tk-nav.com",
+    "units": 45,
+    "units_with_position": 19,
+    "units_with_engine_hours": 0,
+    "units_with_sensors": 0,
+    "records": 1170,
+    "elapsed_ms": 2987
+  },
+  "vds_emulator_history_6h": {
+    "checked_at": "2026-09-25T11:38:29.892Z",
+    "server": "VDS (Zo) via temporary trycloudflare.com tunnel",
+    "units": 3,
+    "units_with_position": 3,
+    "units_with_engine_hours": 3,
+    "units_with_sensors": 3,
+    "records": 222,
+    "elapsed_ms": 651
+  }
+}
