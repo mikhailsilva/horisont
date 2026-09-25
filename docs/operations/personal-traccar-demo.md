@@ -6,9 +6,11 @@ The real (non-demo) FUCHS superadministrator can open **Подключения �
 
 This fallback runs in the ITles HTTP backend, **not on the VPS**. It implements the connector-facing Traccar API, not an installation of Traccar software. It requires no extra account password and does not expose production tracker data. Histories are limited to 48 hours. Local verification used actual HTTP requests through the UI and connector, with synthetic positions only.
 
-## VPS status — 2026-09-25
+## VPS status — 2026-09-25 07:05 UTC
 
-Deployment is **not completed**: the configured SSH identity file is absent from the workspace and no authorized agent/key is available. Existing VPS services were not changed. The optional installer below is prepared and tested locally; its placeholder URL is not a working service. Restore the existing SSH key via a private environment/secret mount, not chat or git, before deployment.
+Deployed on the Zo machine (Debian 12 under gVisor, **no systemd**) in `/home/workspace/itles-traccar-demo`, separate from the ITles gateway/stand, which were not restarted. `run.sh` loads credentials from `.env` there (mode 0600, login `itles-demo`, random password — never commit it). Registration of a Zo user service returned HTTP 403, so public HTTPS goes through a **temporary Cloudflare Quick Tunnel** (`cloudflared`, outbound only, no account). Its `*.trycloudflare.com` URL changes whenever the tunnel restarts and is written to `public-url.txt`; the processes do not survive a Zo machine restart. Restart both with `stand/start-personal-traccar-zo.sh` (copied to the VPS as `start.sh`).
+
+Verified on 2026-09-25: public HTTPS without credentials → 401; with credentials → 3 devices and current positions; the ITles connector dry-run (`/api/connectors/test`) against the public URL returned 3 devices. For a permanent address, register a Zo HTTP service on local port 8765 from the Zo UI or use a named Cloudflare tunnel.
 
 This is a small, read-only **Traccar-compatible API emulator**, not Traccar server software. It serves three synthetic devices at `/api/devices` and latest/history records at `/api/positions`, which is enough to exercise ITles' existing Traccar connector and its dry-run check. Its Teltonika identifiers match the existing `yugtech` demo fleet. Coordinates and sensor readings are generated synthetic data; no tracker or customer is involved.
 
