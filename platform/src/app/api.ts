@@ -74,6 +74,7 @@ export const SOURCE_RU: Record<string, string> = {
   traccar: 'Traccar',
   wialon: 'Wialon',
   aemp: 'ISO 15143-3',
+  autograph: 'АвтоГРАФ',
   manual: 'Вручную',
 };
 

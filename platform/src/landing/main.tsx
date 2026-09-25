@@ -2,11 +2,11 @@ import { createRoot } from 'react-dom/client';
 import '../styles.css';
 import { ThemeToggle } from '../app/main-toggle';
 
-const WINDOWS_ZIP = 'https://github.com/mikhailsilva/horisont/releases/download/native-0.3.2-2026.09.25/ITles-Windows-x64-0.3.2.zip';
-const ANDROID_APK = 'https://github.com/mikhailsilva/horisont/releases/download/native-0.3.2-2026.09.25/itles-android-debug.apk';
+const WINDOWS_ZIP = 'https://github.com/mikhailsilva/horisont/releases/download/native-0.3.3-2026.09.25/ITles-Windows-x64-0.3.3.zip';
+const ANDROID_APK = 'https://github.com/mikhailsilva/horisont/releases/download/native-0.3.3-2026.09.25/itles-android-debug.apk';
 const DOWNLOADS = [
-  { os: 'Android · 0.3.2 (тестовая)', file: ANDROID_APK, note: 'Android 7+, debug-подпись. Не обновляет старый release APK поверх установки. Не удаляйте приложение с несинхронизированными данными. На телефоне не проверено.' },
-  { os: 'Windows · 0.3.2', file: WINDOWS_ZIP, note: 'Windows 10/11 x64: распакуйте ZIP и запустите ITles.exe. Без цифровой подписи; на реальном Windows не проверено.' },
+  { os: 'Android · 0.3.3 (тестовая)', file: ANDROID_APK, note: 'Android 7+, debug-подпись. Не обновляет старый release APK поверх установки. Не удаляйте приложение с несинхронизированными данными. На телефоне не проверено.' },
+  { os: 'Windows · 0.3.3', file: WINDOWS_ZIP, note: 'Windows 10/11 x64: распакуйте ZIP и запустите ITles.exe. Без цифровой подписи; на реальном Windows не проверено.' },
   { os: 'iPhone / iPad', file: './app/', note: 'Кабинет: Safari → «Поделиться» → «На экран Домой». Для GPS в фоне — Traccar Client из App Store.' },
   { os: 'Веб-кабинет', file: './app/', note: 'Любой браузер, без установки.' },
 ];
