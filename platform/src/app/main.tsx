@@ -4,6 +4,8 @@ import { Activity, BookOpen, Building2, Droplets, LogOut, Plug, ScrollText, Sett
 import '../styles.css';
 import { api, ApiError, apiBase, TOKEN_KEY } from './api';
 import { ThemeToggle } from './main-toggle';
+import { clearPreferences, loadPreferences } from './preferences';
+import { setTheme } from './theme';
 import { Fleet } from './pages/Fleet';
 import { MachinePage } from './pages/Machine';
 import { Orgs } from './pages/Orgs';
@@ -36,9 +38,23 @@ export const go = (h: string) => (location.hash = h);
 function App() {
   const hash = useHash();
   const [me, setMe] = useState<Me | null | undefined>(undefined);
+  const [preferenceError, setPreferenceError] = useState('');
+  useEffect(() => {
+    const update = (e: Event) => setPreferenceError((e as CustomEvent<string>).detail);
+    window.addEventListener('itles-preferences-error', update);
+    return () => window.removeEventListener('itles-preferences-error', update);
+  }, []);
   const load = useCallback(() => {
     api<{ user: Me }>('GET', '/api/me')
-      .then((r) => setMe(r.user))
+      .then(async (r) => {
+        try {
+          const preferences = await loadPreferences(r.user.id);
+          if (preferences.theme) setTheme(preferences.theme, false);
+        } catch {
+          setPreferenceError('Не удалось загрузить настройки учётной записи. Обновите страницу после восстановления связи.');
+        }
+        setMe(r.user);
+      })
       .catch((e) => setMe(e instanceof ApiError && e.status === 0 ? (me ?? null) : null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -52,6 +68,8 @@ function App() {
   const logout = async () => {
     await api('POST', '/api/auth/logout').catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
+    clearPreferences();
+    setPreferenceError('');
     setMe(null);
   };
   const parts = hash.split('?')[0].slice(2).split('/');
@@ -137,7 +155,10 @@ function App() {
             <LogOut className="h-4 w-4" strokeWidth={1.75} />
           </button>
         </header>
-        <main className="mx-auto max-w-7xl px-4 py-6 md:px-8">{page}</main>
+        <main className="mx-auto max-w-7xl px-4 py-6 md:px-8">
+          {preferenceError && <div role="alert" className="mb-4 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">{preferenceError}</div>}
+          {page}
+        </main>
       </div>
     </div>
   );

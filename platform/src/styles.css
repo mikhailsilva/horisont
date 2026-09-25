@@ -2,47 +2,47 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Tokens: 21st.dev theme "Darkmatter" (serafimcloud), dark variant moved to pure black. */
+/* 21st.dev: Sage Garden (day), baroworks (night). */
 :root {
-  --background: #f6f6f7;
-  --foreground: #111827;
+  --background: #f8f7f4;
+  --foreground: #1a1f2e;
   --card: #ffffff;
-  --muted: #f3f4f6;
+  --muted: #e8e6e1;
   --muted-foreground: #6b7280;
-  --accent: #eeeeee;
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-  --primary: #d87943;
-  --primary-foreground: #ffffff;
-  --ring: #d87943;
+  --accent: #bfc9bb;
+  --border: #e8e6e1;
+  --input: #bfc9bb;
+  --primary: #7c9082;
+  --primary-foreground: #101c14;
+  --ring: #7c9082;
   --destructive: #dc2626;
   --success: #16a34a;
   --warning: #d97706;
   --danger: #dc2626;
-  --chart-1: #5f8787;
-  --chart-2: #e78a53;
+  --chart-1: #7c9082;
+  --chart-2: #a0aa88;
   --radius: 0.75rem;
   color-scheme: light;
 }
 
 .dark {
-  --background: #000000;
-  --foreground: #ededed;
-  --card: #0a0a0a;
-  --muted: #141414;
-  --muted-foreground: #8b8b8b;
-  --accent: #1a1a1a;
-  --border: #1f1f1f;
-  --input: #2a2a2a;
-  --primary: #e78a53;
-  --primary-foreground: #000000;
-  --ring: #e78a53;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #101013;
+  --muted: #17171b;
+  --muted-foreground: #a1a1aa;
+  --accent: #1c1c21;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.14);
+  --primary: #e3af35;
+  --primary-foreground: #09090b;
+  --ring: #e3af35;
   --destructive: #ef4444;
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --chart-1: #5f8787;
-  --chart-2: #e78a53;
+  --chart-1: #e3af35;
+  --chart-2: #c2820a;
   color-scheme: dark;
 }
 
@@ -114,8 +114,8 @@ body {
   color: #a3a3a3;
 }
 .dark .maplibregl-ctrl-group {
-  background: #0a0a0a;
-  border: 1px solid #1f1f1f;
+  background: var(--card);
+  border: 1px solid var(--border);
 }
 .dark .maplibregl-ctrl-group button + button {
   border-top-color: #1f1f1f;
@@ -124,9 +124,9 @@ body {
   filter: invert(1);
 }
 .dark .maplibregl-popup-content {
-  background: #0a0a0a;
-  color: #ededed;
-  border: 1px solid #1f1f1f;
+  background: var(--card);
+  color: var(--foreground);
+  border: 1px solid var(--border);
 }
 
 /* knowledge base prose */

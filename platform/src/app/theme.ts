@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { savePreferences } from './preferences';
 
 export type Theme = 'dark' | 'light';
 const KEY = 'itles_theme';
@@ -11,15 +12,16 @@ export function getTheme(): Theme {
   }
 }
 
-export function setTheme(t: Theme) {
+export function setTheme(t: Theme, persist = true) {
   try {
     localStorage.setItem(KEY, t);
   } catch {
     // private mode: keep in memory only
   }
   document.documentElement.classList.toggle('dark', t === 'dark');
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#000000' : '#f6f6f7');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#09090b' : '#f8f7f4');
   window.dispatchEvent(new CustomEvent('itles-theme', { detail: t }));
+  if (persist) savePreferences({ theme: t });
 }
 
 export function useTheme(): [Theme, (t: Theme) => void] {

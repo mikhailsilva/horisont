@@ -8,6 +8,7 @@ import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import { Crosshair, Layers, Maximize2, Mountain, Ruler, Square, Trash2 } from 'lucide-react';
 import { geodesicM, polygonArea } from '../../../server/domain/geodesy';
 import { getTheme, useTheme } from '../theme';
+import { usePreferences } from '../preferences';
 
 export interface GisMarker {
   id: string;
@@ -161,8 +162,11 @@ export function GisMap({
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const [theme] = useTheme();
-  const [base, setBase] = useState<Base>('scheme');
-  const [relief, setRelief] = useState(false);
+  const [preferences, savePreferences] = usePreferences();
+  const base: Base = preferences.mapBase ?? 'scheme';
+  const setBase = (mapBase: Base) => savePreferences({ mapBase });
+  const relief = preferences.mapRelief ?? false;
+  const setRelief = (mapRelief: boolean) => savePreferences({ mapRelief });
   const [gen, setGen] = useState(0);
   const [failed, setFailed] = useState(false);
   const [tool, setTool] = useState<'none' | 'ruler' | 'area'>('none');
