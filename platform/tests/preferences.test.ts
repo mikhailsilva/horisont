@@ -24,16 +24,16 @@ describe('account preferences', () => {
 
   it('merges explicit choices and persists across sessions without crossing accounts', async () => {
     expect((await call('PATCH', '/api/me/preferences', { mapBase: 'hybrid' }, first)).status).toBe(200);
-    await call('PATCH', '/api/me/preferences', { theme: 'light' }, first);
+    await call('PATCH', '/api/me/preferences', { theme: 'light', mapTheme: 'dark' }, first);
     const login = await call('POST', '/api/auth/login', { login: 'settings-admin', password: 'password-test-123' });
-    expect((await call('GET', '/api/me/preferences', undefined, login.data.token)).data.preferences).toEqual({ mapBase: 'hybrid', theme: 'light' });
+    expect((await call('GET', '/api/me/preferences', undefined, login.data.token)).data.preferences).toEqual({ mapBase: 'hybrid', theme: 'light', mapTheme: 'dark' });
     expect((await call('GET', '/api/me/preferences', undefined, second)).data.preferences).toEqual({});
     await call('PATCH', '/api/me/preferences', { mapBase: 'topo' }, first);
     expect((await call('GET', '/api/me/preferences', undefined, first)).data.preferences.mapBase).toBe('topo');
   });
 
   it('rejects unknown fields and invalid values', async () => {
-    for (const body of [{ mapBase: 'bad' }, { theme: 'blue' }, { user_id: 'other' }, { mapRelief: 'yes' }]) {
+    for (const body of [{ mapBase: 'bad' }, { theme: 'blue' }, { mapTheme: 'night' }, { user_id: 'other' }, { mapRelief: 'yes' }]) {
       expect((await call('PATCH', '/api/me/preferences', body, first)).status).toBe(400);
     }
   });

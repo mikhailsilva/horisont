@@ -15,7 +15,7 @@ function createWindow() {
     height: 900,
     title: 'ITles',
     backgroundColor: '#000000',
-    icon: path.join(WEB, 'icon-512.png'),
+    icon: path.join(__dirname, 'icon.ico'),
     webPreferences: { contextIsolation: true, sandbox: true },
   });
   win.removeMenu();

@@ -1,0 +1,27 @@
+[Unit]
+Description=ITles personal Traccar-compatible demo API
+After=network.target
+
+[Service]
+Type=simple
+DynamicUser=yes
+EnvironmentFile=/etc/itles/personal-traccar.env
+Environment=TRACCAR_DEMO_BIND=127.0.0.1
+Environment=TRACCAR_DEMO_PORT=8765
+ExecStart=/usr/bin/python3 /opt/itles/stand/personal_traccar.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

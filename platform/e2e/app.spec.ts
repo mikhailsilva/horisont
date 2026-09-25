@@ -27,6 +27,24 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await page.getByRole('button', { name: 'Создать' }).click();
   await expect(page.getByText('Леспромхоз Тайга')).toBeVisible();
 
+  const orgRows = [
+    { row: page.locator('[data-org-level="fuchs"]').first(), width: 6 },
+    { row: page.locator('[data-org-level="distributor"]').filter({ hasText: 'Дистрибьютор Северо-Запад' }), width: 18 },
+    { row: page.locator('[data-org-level="customer"]').filter({ hasText: 'Леспромхоз Тайга' }), width: 30 },
+  ];
+  const rowContentX: number[] = [];
+  const barColors: string[] = [];
+  for (const { row, width } of orgRows) {
+    await expect(row).toBeVisible();
+    const bar = row.locator(':scope > span.absolute');
+    await expect(bar).toHaveCSS('width', `${width}px`);
+    await expect(bar).toHaveClass(/bg-\[#7c9082\]\/45/);
+    barColors.push(await bar.evaluate((el) => getComputedStyle(el).backgroundColor));
+    rowContentX.push((await row.locator(':scope > div').first().boundingBox())!.x);
+  }
+  expect(new Set(barColors).size).toBe(1);
+  expect(Math.max(...rowContentX) - Math.min(...rowContentX)).toBeLessThan(1);
+
   await page.goto('/app/#/');
   await page.getByRole('button', { name: '+ Машина' }).click();
   await page.locator('.fixed form input').first().fill('Харвестер №7');
@@ -99,23 +117,58 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
     await hybrid.check();
     await preferenceSaved;
   } else {
+    await expect(page.getByText(/Карта требует WebGL2/)).toBeVisible();
     await page.evaluate(async () => fetch('/api/me/preferences', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${localStorage.getItem('itles_token')}` },
       body: JSON.stringify({ mapBase: 'hybrid' }),
     }));
   }
+
+  const preferencesBeforeMapTheme = await page.evaluate(async () => {
+    const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
+    return (await response.json()).preferences;
+  });
+  if (hasLayerToolbar) {
+    const preferenceSaved = page.waitForResponse((response) => response.url().includes('/api/me/preferences') && response.request().method() === 'PATCH');
+    await page.getByRole('button', { name: 'Включить ночную карту' }).click();
+    await preferenceSaved;
+    await expect(page.getByRole('button', { name: 'Включить дневную карту' })).toBeVisible();
+  } else {
+    await expect(page.getByText(/Карта требует WebGL2/)).toBeVisible();
+    await page.evaluate(async () => fetch('/api/me/preferences', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${localStorage.getItem('itles_token')}` },
+      body: JSON.stringify({ mapTheme: 'dark' }),
+    }));
+  }
+  const preferencesAfterMapTheme = await page.evaluate(async () => {
+    const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
+    return (await response.json()).preferences;
+  });
+  expect(preferencesAfterMapTheme.mapTheme).toBe('dark');
+  expect(preferencesAfterMapTheme.theme).toBe(preferencesBeforeMapTheme.theme);
+
   await page.reload();
   if (hasLayerToolbar) {
     await expect(page.getByRole('button', { name: 'Гибрид' })).toBeVisible();
     await page.getByRole('button', { name: 'Гибрид' }).click();
     await expect(page.getByLabel('Гибрид')).toBeChecked();
+    await expect(page.getByRole('button', { name: 'Включить дневную карту' })).toBeVisible();
   } else {
     await expect.poll(() => page.evaluate(async () => {
       const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
       return (await response.json()).preferences.mapBase;
     })).toBe('hybrid');
   }
+
+  const fleetTime = page.getByLabel('Парк на момент времени');
+  await fleetTime.check();
+  await expect(fleetTime).toBeChecked();
+  const fleetReturnLive = page.getByRole('button', { name: 'Сейчас', exact: true });
+  await expect(fleetReturnLive).toBeVisible();
+  await fleetReturnLive.click();
+  await expect(fleetTime).not.toBeChecked();
 
   const auth = await page.evaluate(() => ({ token: localStorage.getItem('itles_token'), api: localStorage.getItem('itles_api') }));
   const accountContext = await browser.newContext();
@@ -130,6 +183,10 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
     const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
     return (await response.json()).preferences.mapBase;
   })).toBe('hybrid');
+  await expect.poll(() => otherAccountPage.evaluate(async () => {
+    const response = await fetch('/api/me/preferences', { headers: { authorization: `Bearer ${localStorage.getItem('itles_token')}` } });
+    return (await response.json()).preferences.mapTheme;
+  })).toBe('dark');
   await accountContext.close();
 
   const machineId = await page.evaluate(async () => {
@@ -160,4 +217,18 @@ test('landing → setup → hierarchy → machine → phone in the cab → data 
   await cab.getByLabel(/текущая привязка этого браузера будет заменена/).check();
   await expect(replace).toBeEnabled();
   await phone.close();
+
+  await page.goto(`/app/#/machine/${machineId}`);
+  await expect(page.getByRole('heading', { name: 'История и таймлайн' })).toBeVisible();
+  await page.getByRole('button', { name: 'Вчера' }).click();
+  const timelineReturnLive = page.getByRole('button', { name: 'В реальное время', exact: true });
+  await expect(timelineReturnLive).toBeEnabled();
+  const mapReturnLive = page.getByRole('button', { name: 'Сейчас', exact: true });
+  if (await mapReturnLive.isVisible({ timeout: 8_000 }).catch(() => false)) {
+    await mapReturnLive.click();
+  } else {
+    await expect(page.getByText(/Карта требует WebGL2/)).toBeVisible();
+    await timelineReturnLive.click();
+  }
+  await expect(timelineReturnLive).toBeDisabled();
 });

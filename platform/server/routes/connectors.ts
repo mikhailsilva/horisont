@@ -11,6 +11,20 @@ import { loadMachine, recomputeDirtyDays } from '../ingest.js';
 import { purgeExpired } from '../purge.js';
 import { ensureDemoTenant, pruneDemoTelemetry } from '../demo.js';
 
+function normalizeTraccarBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/api\/?$/i, '').replace(/\/+$/, '');
+}
+
+function connectorSecret(body: Record<string, any>): Record<string, string> {
+  const secret: Record<string, string> = {};
+  for (const key of ['token', 'email', 'password', 'username']) if (typeof body[key] === 'string' && body[key]) secret[key] = body[key];
+  return secret;
+}
+
+function redactConnectorSecrets(value: string, secret: Record<string, string>): string {
+  return Object.values(secret).reduce((text, item) => text.split(item).join('[скрыто]'), value);
+}
+
 router.on('GET', '/api/connectors', async (c) => {
   const u = user(c);
   if (!can(u, 'connectors.manage') && !hasBlock(u, 'sources')) throw forbidden('Подключения скрыты для вашей роли');
@@ -43,6 +57,24 @@ router.on('GET', '/api/connectors/wialon/login-url', async (c) => {
   return json({ url: wialonLoginUrl(loginHost.href, redirect) });
 });
 
+router.on('POST', '/api/connectors/test', async (c) => {
+  const u = user(c);
+  const b = await readJson(c.req);
+  const orgId = typeof b.org_id === 'string' ? b.org_id : u.org_id;
+  await assertCap(c.db, u, 'connectors.manage', orgId, 'Подключать платформы могут администраторы');
+  const rawBaseUrl = str(b.base_url, 300);
+  if (!rawBaseUrl) throw bad('bad_url', 'Укажите адрес сервера');
+  const baseUrl = normalizeTraccarBaseUrl(rawBaseUrl);
+  const secret = connectorSecret(b);
+  try {
+    const units = await fetchUnits('traccar', baseUrl, secret);
+    return json({ units: units.length, devices: units.slice(0, 5).map((unit) => redactConnectorSecrets(unit.name, secret).slice(0, 120)) });
+  } catch (e) {
+    if (e instanceof ConnectorError) throw new HttpError(422, 'connector_' + e.code, redactConnectorSecrets(e.message, secret));
+    throw e;
+  }
+});
+
 router.on('POST', '/api/connectors', async (c) => {
   const u = user(c);
   const b = await readJson(c.req);
@@ -50,10 +82,14 @@ router.on('POST', '/api/connectors', async (c) => {
   await assertCap(c.db, u, 'connectors.manage', orgId, 'Подключать платформы могут администраторы');
   const kind = String(b.kind);
   if (!['wialon', 'traccar', 'aemp'].includes(kind)) throw bad('bad_kind', 'Тип подключения: wialon, traccar или aemp');
-  const baseUrl = str(b.base_url, 300);
-  if (!baseUrl) throw bad('bad_url', 'Укажите адрес сервера');
-  const secret: Record<string, string> = {};
-  for (const k of ['token', 'email', 'password', 'username']) if (typeof b[k] === 'string' && b[k]) secret[k] = b[k];
+  const rawBaseUrl = str(b.base_url, 300);
+  if (!rawBaseUrl) throw bad('bad_url', 'Укажите адрес сервера');
+  const baseUrl = kind === 'traccar' ? normalizeTraccarBaseUrl(rawBaseUrl) : rawBaseUrl;
+  if (kind === 'traccar' && /\/api\/traccar-demo\/?$/.test(new URL(baseUrl).pathname)) {
+    const org = (await c.db.query<{ is_demo: boolean }>(`select is_demo from orgs where id = $1`, [orgId])).rows[0];
+    if (!org?.is_demo) throw bad('demo_only', 'Синтетический Traccar разрешён только для демо-клиента. Выберите организацию с пометкой «демо».');
+  }
+  const secret = connectorSecret(b);
   let units;
   try {
     units = await fetchUnits(kind, baseUrl, secret);

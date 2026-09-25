@@ -10,7 +10,7 @@ router.on('PATCH', '/api/me/preferences', async (c) => {
   const u = user(c);
   const b = await readJson(c.req);
   const allowed: Record<string, unknown[]> = {
-    mapBase: ['scheme', 'satellite', 'hybrid', 'topo'], theme: ['light', 'dark'],
+    mapBase: ['scheme', 'satellite', 'hybrid', 'topo'], mapTheme: ['light', 'dark'], theme: ['light', 'dark'],
     mapRelief: [true, false],
   };
   if (!b || typeof b !== 'object' || Array.isArray(b) ||

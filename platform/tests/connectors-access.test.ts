@@ -73,6 +73,72 @@ describe('connector administration', () => {
     expect(new URL(local.data.url).pathname).toBe('/fleet/login.html');
   });
 
+  it('tests Traccar without saving credentials or importing devices', async () => {
+    const db = await getDb();
+    const before = await db.query(
+      `select (select count(*)::int from connectors) connectors,
+              (select count(*)::int from machines) machines,
+              (select count(*)::int from sources) sources,
+              (select count(*)::int from audit_log) audits`,
+    );
+    const fetchStub = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      expect(String(url)).toMatch(/^https:\/\/traccar\.example\.org\/api\/(devices|positions)$/);
+      const data = String(url).endsWith('/devices')
+        ? Array.from({ length: 7 }, (_, i) => ({ id: i + 1, name: `Техника ${i + 1}` }))
+        : [];
+      return new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      const result = await call(
+        'POST',
+        '/api/connectors/test',
+        { base_url: 'https://traccar.example.org/api/', token: 'never-return-this-token', org_id: (await db.query<any>(`select org_id from connectors where id = $1`, [connectorId])).rows[0].org_id },
+        dealerAdmin,
+      );
+      expect(result.status).toBe(200);
+      expect(result.data).toEqual({ units: 7, devices: ['Техника 1', 'Техника 2', 'Техника 3', 'Техника 4', 'Техника 5'] });
+      expect(JSON.stringify(result.data)).not.toContain('never-return-this-token');
+      expect(fetchStub).toHaveBeenCalledTimes(2);
+      const after = await db.query(
+        `select (select count(*)::int from connectors) connectors,
+                (select count(*)::int from machines) machines,
+                (select count(*)::int from sources) sources,
+                (select count(*)::int from audit_log) audits`,
+      );
+      expect(after.rows).toEqual(before.rows);
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
+  it('rejects Traccar dry-runs for unauthorized roles and organisations', async () => {
+    const db = await getDb();
+    const orgId = (await db.query<any>(`select org_id from connectors where id = $1`, [connectorId])).rows[0].org_id;
+    const fetchStub = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('[]', { headers: { 'content-type': 'application/json' } }));
+    try {
+      const body = { base_url: 'https://traccar.example.org', token: 'secret', org_id: orgId };
+      expect((await call('POST', '/api/connectors/test', body, viewer)).status).toBe(403);
+      expect((await call('POST', '/api/connectors/test', body, otherAdmin)).status).toBe(404);
+      expect(fetchStub).not.toHaveBeenCalled();
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
+  it('rejects synthetic imports into a real customer before fetching or saving', async () => {
+    const db = await getDb();
+    const orgId = (await db.query<any>(`select org_id from connectors where id = $1`, [connectorId])).rows[0].org_id;
+    const fetchStub = vi.spyOn(globalThis, 'fetch');
+    try {
+      const r = await call('POST', '/api/connectors', { kind: 'traccar', base_url: 'https://itles.example/api/traccar-demo', token: 'scoped-demo-token', org_id: orgId }, dealerAdmin);
+      expect(r.status).toBe(400);
+      expect(r.data.error).toBe('demo_only');
+      expect(fetchStub).not.toHaveBeenCalled();
+    } finally {
+      fetchStub.mockRestore();
+    }
+  });
+
   it('keeps connectors inside an organisation tree and lets its distributor administer them', async () => {
     expect((await call('GET', '/api/connectors', undefined, otherAdmin)).data.connectors).toHaveLength(0);
     expect((await call('POST', `/api/connectors/${connectorId}/sync`, {}, otherAdmin)).status).toBe(404);

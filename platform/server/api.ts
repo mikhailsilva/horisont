@@ -6,6 +6,7 @@ import './routes/machines.js';
 import './routes/machine-photo.js';
 import './routes/devices.js';
 import './routes/connectors.js';
+import './routes/traccar-demo.js';
 import './routes/stand.js';
 import './simext/push.js';
 

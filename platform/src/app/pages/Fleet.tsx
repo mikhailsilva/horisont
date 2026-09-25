@@ -187,7 +187,7 @@ export function Fleet({ me }: { me: Me }) {
       </div>
       {sees(me, 'map') && (markers.length > 0 || at) && (
         <div className="space-y-2">
-          <GisMap markers={markers} geofences={gf.data?.geofences ?? []} height={420} onPick={(id) => go('#/machine/' + id)} fitKey={at ? 'fleet-at' : 'fleet-live'} />
+          <GisMap markers={markers} geofences={gf.data?.geofences ?? []} height={420} onPick={(id) => go('#/machine/' + id)} fitKey={at ? 'fleet-at' : 'fleet-live'} isHistorical={at !== null} onReturnLive={() => { setAt(null); setTick((x) => x + 1); }} />
           {canHistory && (
             <div className="card flex flex-wrap items-center gap-3 px-4 py-2 text-sm">
               <label className="flex items-center gap-2 whitespace-nowrap">
