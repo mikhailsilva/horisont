@@ -1,8 +1,9 @@
 // Source of truth for the database schema. Idempotent: safe to run on every cold start.
-export const SCHEMA_VERSION = '5';
+export const SCHEMA_VERSION = '6';
 
 const ROLE_CHECK = `('superadmin', 'admin', 'analyst', 'engineer', 'dispatcher', 'mechanic', 'viewer', 'operator')`;
-const SOURCE_KINDS = `('tracker', 'phone', 'osmand', 'traccar', 'wialon', 'aemp', 'manual')`;
+const SOURCE_KINDS = `('tracker', 'phone', 'osmand', 'traccar', 'wialon', 'aemp', 'autograph', 'manual')`;
+const CONNECTOR_KINDS = `('wialon', 'traccar', 'aemp', 'autograph', 'gateway')`;
 
 export const SCHEMA_SQL = `
 -- ITles platform schema (PostgreSQL 15+; also runs on PGlite for tests).
@@ -76,7 +77,7 @@ create index if not exists machines_org on machines(org_id);
 create table if not exists connectors (
   id text primary key,
   org_id text not null references orgs(id),
-  kind text not null check (kind in ('wialon', 'traccar', 'aemp', 'gateway')),
+  kind text not null check (kind in ${CONNECTOR_KINDS}),
   label text not null,
   base_url text,
   secret_enc text,
@@ -265,6 +266,8 @@ update invites i set role = case o.kind when 'fuchs' then 'analyst' when 'distri
 alter table users add constraint users_role_check check (role in ${ROLE_CHECK});
 alter table invites add constraint invites_role_check check (role in ${ROLE_CHECK});
 alter table sources add constraint sources_kind_check check (kind in ${SOURCE_KINDS});
+alter table connectors drop constraint if exists connectors_kind_check;
+alter table connectors add constraint connectors_kind_check check (kind in ${CONNECTOR_KINDS});
 
 create table if not exists settings (
   key text primary key,

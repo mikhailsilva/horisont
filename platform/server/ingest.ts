@@ -49,6 +49,7 @@ export const DEFAULT_METHOD: Record<string, RawMethod> = {
   traccar: 'platform',
   wialon: 'platform',
   aemp: 'ecu',
+  autograph: 'platform',
   manual: 'device',
 };
 

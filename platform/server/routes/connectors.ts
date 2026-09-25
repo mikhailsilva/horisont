@@ -1,4 +1,4 @@
-// Monitoring platforms (Wialon, Traccar, ISO 15143-3), near-real-time refresh and the daily cron.
+// Monitoring platforms (АвтоГРАФ.WEB, Wialon, Traccar, ISO 15143-3), near-real-time refresh and the daily cron.
 import { randomUUID } from 'node:crypto';
 import { assertCap, assertOrgVisible, can, hasBlock, visibleOrgIds } from '../access.js';
 import { bad, forbidden, HttpError, json, notFound, readJson } from '../http.js';
@@ -64,10 +64,11 @@ router.on('POST', '/api/connectors/test', async (c) => {
   await assertCap(c.db, u, 'connectors.manage', orgId, 'Подключать платформы могут администраторы');
   const rawBaseUrl = str(b.base_url, 300);
   if (!rawBaseUrl) throw bad('bad_url', 'Укажите адрес сервера');
-  const baseUrl = normalizeTraccarBaseUrl(rawBaseUrl);
+  const kind = b.kind === 'autograph' ? 'autograph' : 'traccar';
+  const baseUrl = kind === 'traccar' ? normalizeTraccarBaseUrl(rawBaseUrl) : rawBaseUrl.trim();
   const secret = connectorSecret(b);
   try {
-    const units = await fetchUnits('traccar', baseUrl, secret);
+    const units = await fetchUnits(kind, baseUrl, secret);
     return json({ units: units.length, devices: units.slice(0, 5).map((unit) => redactConnectorSecrets(unit.name, secret).slice(0, 120)) });
   } catch (e) {
     if (e instanceof ConnectorError) throw new HttpError(422, 'connector_' + e.code, redactConnectorSecrets(e.message, secret));
@@ -81,13 +82,16 @@ router.on('POST', '/api/connectors', async (c) => {
   const orgId = typeof b.org_id === 'string' ? b.org_id : u.org_id;
   await assertCap(c.db, u, 'connectors.manage', orgId, 'Подключать платформы могут администраторы');
   const kind = String(b.kind);
-  if (!['wialon', 'traccar', 'aemp'].includes(kind)) throw bad('bad_kind', 'Тип подключения: wialon, traccar или aemp');
+  if (!['autograph', 'wialon', 'traccar', 'aemp'].includes(kind)) throw bad('bad_kind', 'Тип подключения: autograph, wialon, traccar или aemp');
   const rawBaseUrl = str(b.base_url, 300);
   if (!rawBaseUrl) throw bad('bad_url', 'Укажите адрес сервера');
   const baseUrl = kind === 'traccar' ? normalizeTraccarBaseUrl(rawBaseUrl) : rawBaseUrl;
-  if (kind === 'traccar' && /\/api\/traccar-demo\/?$/.test(new URL(baseUrl).pathname)) {
+  const demoPath = kind === 'traccar' ? /\/api\/traccar-demo\/?$/ : kind === 'autograph' ? /\/api\/autograph-demo(\/ServiceJSON)?\/?$/i : null;
+  // the vendor's public demo holds 2013 archives of foreign vehicles: never import it into a real customer
+  const vendorDemo = kind === 'autograph' && new URL(baseUrl).hostname.toLowerCase() === 'demo.tk-nav.com';
+  if (vendorDemo || demoPath?.test(new URL(baseUrl).pathname)) {
     const org = (await c.db.query<{ is_demo: boolean }>(`select is_demo from orgs where id = $1`, [orgId])).rows[0];
-    if (!org?.is_demo) throw bad('demo_only', 'Синтетический Traccar разрешён только для демо-клиента. Выберите организацию с пометкой «демо».');
+    if (!org?.is_demo) throw bad('demo_only', 'Демо- и синтетические данные разрешены только для демо-клиента. Выберите организацию с пометкой «демо».');
   }
   const secret = connectorSecret(b);
   let units;
